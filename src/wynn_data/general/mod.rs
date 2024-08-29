@@ -43,6 +43,8 @@ pub trait WynnEnum: Sized + std::fmt::Debug + std::fmt::Display + Clone + Copy +
 /// 
 /// Note that Int, Def, and Agi have slightly different %'s from the default given here
 /// 
+/// Additionally, this function is uncapped (values above 150 still scale even though they're impossible to achieve in-game)
+/// 
 /// Use `skill_to_pct()` instead for the actual % bonus for respective skills
 /// # Examples
 /// ```
@@ -69,6 +71,25 @@ pub fn skill_to_pct(skill: Skill, amt: i32) -> f32 {
         Skill::Str => raw_skill_pct(amt.min(150)),
         Skill::Dex => raw_skill_pct(amt.min(150)),
         Skill::Int => raw_skill_pct(amt.min(150))*0.6190092383711963,
+        Skill::Def => raw_skill_pct(amt.min(150))*0.867,
+        Skill::Agi => raw_skill_pct(amt.min(150))*0.951,
+    }
+}
+
+/// Gives the damage multiplier boost for a specific skill.
+/// 
+/// The returned value is the same as `skill_to_pct()`, with the exception of intelligence, which has a damage multiplier of 1.0
+/// # Examples
+/// ```
+/// asserteq!(skill_to_pct(Skill::Dex,50),39.9); // get the damage multiplier for lightning damage
+/// asserteq!(skill_to_pct(Skill::Int,50),24.7); // get the damage multiplier for water damage
+/// asserteq!(skill_to_pct(Skill::Agi,50),37.9); // get the damage multiplier for air damage
+/// ```
+pub fn skill_damage_mult(skill: Skill, amt: i32) -> f32 {
+    match skill{
+        Skill::Str => raw_skill_pct(amt.min(150)),
+        Skill::Dex => raw_skill_pct(amt.min(150)),
+        Skill::Int => raw_skill_pct(amt.min(150)),
         Skill::Def => raw_skill_pct(amt.min(150))*0.867,
         Skill::Agi => raw_skill_pct(amt.min(150))*0.951,
     }

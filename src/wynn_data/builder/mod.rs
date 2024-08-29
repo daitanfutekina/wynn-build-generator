@@ -16,7 +16,7 @@ use crate::ref_irrelevent_struct_func;
 /// let bld2_unwrapped = bld2.unwrap();
 /// assert!(bld2_unwrapped.get_stat(Atrs::Hp)+bld2_unwrapped.get_stat(Atrs::HpBonus), 10710);
 /// ```
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct WynnBuild {
     stats: [i32; Atrs::NUM_STATS],
     dams: [(u32, u32); 6],
@@ -75,32 +75,36 @@ impl WynnBuild {
     }
 
     /// Calculates the average melee damage
-    pub fn calc_melee_dam(&self) -> f32{
+    /// 
+    /// Note this automatically puts extra skill points into strength, then dexterity (TODO: add separate function for this option)
+    pub fn calc_melee_dam(&self, use_atk_spd: bool) -> f32{
         // let mut avg = (0.0,0.0);
         let m: DamageData = DamageData::melee(self,false);
-        self.calc_dam(m, false,[0.6,0.0,0.0,0.0,0.0,0.0],2) * atk_spd_mult(self.overall_atk_spd())
+        println!("{:#?}",m.skill_dam_bonus);
+        self.calc_dam(m, false,[1.0,0.0,0.0,0.0,0.0,0.0],1) * if use_atk_spd{atk_spd_mult(self.overall_atk_spd())} else {1.0}
     }
 
     /// Calculates the average spell damage
+    /// 
+    /// Note this automatically puts extra skill points into strength, then dexterity (TODO: add separate function for this option)
     pub fn calc_spell_dam(&self) -> f32{
         // let mut avg = (0.0,0.0);
         let s: DamageData = DamageData::spell(self);
-        self.calc_dam(s, true, [0.8,0.0,0.3,0.0,0.2,0.0], 2)
+        self.calc_dam(s, true, [1.6,0.0,0.0,0.0,0.2,0.0], 1)
     }
 
     /// calculates the average damage of the build given some damage data 
     /// copied from https://github.com/wynnbuilder/wynnbuilder.github.io/blob/master/js/damage_calc.js and thrown into symbolab to compress,
-    /// if there's an error here then blame atlas inc
     fn calc_dam(&self, d: DamageData, sp_dam: bool, mults: [f32; 6], num_hits: i32) -> f32{
         let mut avg = (0.0,0.0);
         let atk_spd_mul = if sp_dam {atk_spd_mult(self.weapon_atk_spd())} else {1.0};
         let mults_total: f32 = mults.iter().sum();
-        let add_dam = [(0.0,0.0),(0.0,0.0),(0.0,0.0),(0.0,0.0),(3.0,5.0),(0.0,0.0)];
+        let add_dam = [(0.0,0.0),(0.0,0.0),(0.0,0.0),(0.0,0.0),(0.0,0.0),(0.0,0.0)]; // todo: atree ele mastery
         for i in 0_usize..6{
             let mut pct_bonus = 1.0+d.pct+d.ele_dam_pcts[i];
-            let raw = (d.raw*(d.dams[i].0/d.total_dam.0)+d.ele_dam_raws[i],d.raw*(d.dams[i].1/d.total_dam.1)+d.ele_dam_raws[i]);
+            let raw = (d.raw*(d.dams[i].0/d.total_dam.0)+d.ele_dam_raws[i], d.raw*(d.dams[i].1/d.total_dam.1)+d.ele_dam_raws[i]);
             let mut weap_dam = (d.dams[i].0*mults[0],d.dams[i].1*mults[0]);
-            if i>0{ // adds rainbow damage
+            if i>0{ // adds elem damage
                 weap_dam.0+=mults[i]*d.total_dam.0;
                 weap_dam.1+=mults[i]*d.total_dam.1;
                 pct_bonus+=d.ele_dam_pcts[6]+d.skill_dam_bonus[i-1];
@@ -127,6 +131,15 @@ impl WynnBuild {
         self.items.last().unwrap_or(&WynnItem::NULL).atk_spd()
     }
 
+    /// Calculates the number of a specific spell that can be cast per second (ignoring spam cost increases)
+    /// 
+    /// `spell`: number 1 to 4
+    pub fn spell_per_second(&self, spell: usize) -> f32{
+        self.stats[Atrs::SpRaw1 as usize + spell - 1];
+        todo!()
+        // self.stats[Atrs::SpPct1 as usize + spell - 1] + 
+    }
+
     /// Generates the hash of this build, which is used by wynnbuilder's link sharing system. 
     pub fn generate_hash(&self) -> String {
         self.items.iter().enumerate().map(|(t, item)| {if item.is_null() {url_hash_val(10000 + t as i32, 3)} else {item.get_hash()}
@@ -136,6 +149,10 @@ impl WynnBuild {
     /// Generates a string containing all the names of items in this build, separated by commas. 
     pub fn item_names(&self) -> String{
         self.items.iter().enumerate().map(|(t, item)| {if item.is_null() {"null ".to_string()} else {item.name().to_string()+", "}}).collect::<String>()
+    }
+
+    pub fn iter_items(&self) -> std::slice::Iter<'_, WynnItem>{
+        self.items.iter()
     }
 }
 
@@ -155,6 +172,7 @@ struct DamageData{
     pct: f32
 }
 impl DamageData{
+    // TODO: lots of duplicate code here
     fn melee(bld: &WynnBuild, use_atk_spd: bool) -> Self{
         let dam_pcts_splice = bld.ids_splice(Atrs::NDamPct, 7);
         let dam_raws_splice = bld.ids_splice(Atrs::NDamRaw, 7);
@@ -169,13 +187,14 @@ impl DamageData{
         // todo, if str<0, just put all extra skill points into dex
         let mut sp_bonus = [bld.calc_max_skill(Skill::Str, bld.free_sps), 0];
         sp_bonus[1] = bld.calc_max_skill(Skill::Dex, bld.free_sps-sp_bonus[0]);
+        // sp_bonus = [0,0]; // TODO: option to turn off auto application of extra skill points
         for i in 0_usize..7{
             if i<6{
                 dams[i]=(bld.dams[i].0 as f32, bld.dams[i].1 as f32);
                 total_dam.0+=dams[i].0;
                 total_dam.1+=dams[i].1;
                 if i<5{
-                    skill_dam_bonus[i]=skill_to_pct(Skill::try_from(if i==2{0}else{i}).unwrap(), if i<2{bld.skills.get::<_,i32>(i)+sp_bonus[i]}else{bld.skills.get::<_,i32>(i)});
+                    skill_dam_bonus[i]=skill_damage_mult(Skill::VARIENTS[i], if i<2{bld.skills.get::<_,i32>(i)+sp_bonus[i]} else {bld.skills.get::<_,i32>(i)});
                 }
             }
             dam_pcts[i]=(dam_pcts_splice[i] + mdam_pcts_splice[i]) as f32 / 100.0;
@@ -190,6 +209,7 @@ impl DamageData{
         let dam_raws_splice = bld.ids_splice(Atrs::NDamRaw, 7);
         let sdam_pcts_splice = bld.ids_splice(Atrs::NSdPct,7);
         let sdam_raws_splice = bld.ids_splice(Atrs::NSdRaw,7);
+
         let mut dam_pcts: [f32; 7] = [0.0;7];
         let mut dam_raws: [f32; 7] = [0.0;7];
         let mut dams: [(f32,f32); 6] = [(0.0,0.0);6];
@@ -198,19 +218,19 @@ impl DamageData{
         let mut sp_bonus = [bld.calc_max_skill(Skill::Str, bld.free_sps), 0];
         sp_bonus[1] = bld.calc_max_skill(Skill::Dex, bld.free_sps-sp_bonus[0]);
         // let atk_spd_mul = atk_spd_mult(bld.atk_spd());
+        sp_bonus = [0,0]; // add option
         for i in 0_usize..7{
             if i<6{
                 dams[i]=(bld.dams[i].0 as f32, bld.dams[i].1 as f32);
                 total_dam.0+=dams[i].0;
                 total_dam.1+=dams[i].1;
                 if i<5{
-                    skill_dam_bonus[i]=skill_to_pct(Skill::try_from(if i==2{0}else{i}).unwrap(), if i<2{bld.skills.get::<_,i32>(i)+sp_bonus[i]}else{bld.skills.get::<_,i32>(i)});
+                    skill_dam_bonus[i]=skill_damage_mult(Skill::VARIENTS[i], if i<2{bld.skills.get::<_,i32>(i)+sp_bonus[i]}else{bld.skills.get::<_,i32>(i)});
                 }
             }
             dam_pcts[i]=(dam_pcts_splice[i] + sdam_pcts_splice[i]) as f32 / 100.0;
             dam_raws[i]=(dam_raws_splice[i]+sdam_raws_splice[i]) as f32;
         }
-        dam_pcts[4]+=0.15;
         let spell_raw = bld.get_stat(Atrs::SdRaw) as f32 + bld.get_stat(Atrs::DamRaw) as f32;
         let spell_pct = bld.get_stat(Atrs::SdPct) as f32 / 100.0;
         Self{ele_dam_pcts: dam_pcts, ele_dam_raws: dam_raws, dams, total_dam, skill_dam_bonus, raw: spell_raw, pct: spell_pct}
@@ -242,8 +262,13 @@ macro_rules! add_items(
 /// <hr>
 /// Used to make a WynnBuild
 /// 
-/// This macro returns WynnBuild::make(), but allows for succeeding arguments to be ignored:<br>
+/// This macro calls WynnBuild::make(), but uses defaults for succeeding values, allowing you to not include them if you want.<br>
 /// By default: `lvl: 106, base_skills: I12x5::ZERO, atree: Default::default()`
+/// 
+/// # Important
+/// This macro returns an `Option<WynnBuild>`, so make sure you unwrap() the result!
+/// <br>Syntax errors for macros don't yet bubble to the macro's invocation site, so you may get compile errors without highlighting. 
+/// 
 /// # Examples
 /// ```
 /// // insert some items
@@ -305,7 +330,7 @@ ref_irrelevent_struct_func!(WynnBuild, pub MakeBuild,
     }
 );
 impl MakeBuild<&str> for WynnBuild{
-    fn make(item_names: &[&str], lvl: i32, base_skills: I12x5, atree:  Rc<AtreeBuild>) -> Option<WynnBuild>{
+    fn make(item_names: &[&str], lvl: i32, base_skills: I12x5, atree: Rc<AtreeBuild>) -> Option<WynnBuild>{
         let items: Vec<WynnItem> = item_names.iter().map(|name| items::with_name(name).unwrap()).collect();
         <Self as MakeBuild<WynnItem>>::make(&items, lvl, base_skills, atree)
     }

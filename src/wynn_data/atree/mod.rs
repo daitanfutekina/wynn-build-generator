@@ -12,7 +12,7 @@ struct AtreeItemData<T: ClassAtreeEnums>{
     props: &'static [u32],
     effects: &'static [&'static [u32]],
     data: &'static [u32],
-    phantom: PhantomData<T>
+    enum_id: T::Items
 }
 impl <T: ClassAtreeEnums> AtreeItemData<T>{
     const fn iter_parents(&self) -> IterAtreeItems<T::Items>{
@@ -110,7 +110,7 @@ impl <T: ClassAtreeEnums> AtreeItemEffect<T>{
     }
 }
 
-#[derive(Default)]
+#[derive(Default,PartialEq)]
 pub struct AtreeBuild{
     // spells: [Spell; 5],
     stat_bonuses: Vec<(Atrs,i32)>,

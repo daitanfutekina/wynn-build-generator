@@ -1,3 +1,4 @@
+use atree::AtreeBuild;
 // mod items;
 // mod wynn_calcs;
 use gloo::timers::callback::Timeout;
@@ -11,6 +12,9 @@ use yew::prelude::*;
 
 mod wynn_data;
 use wynn_data::{*, builder::WynnBuild, items::*, I12x5};
+
+mod best_build_calc;
+mod website;
 
 const AHH: &'static [Test2] = &[
     Test2 {
@@ -27,9 +31,9 @@ const AHH: &'static [Test2] = &[
 // new URLSearchParams(window.location.search);
 fn main() {
 
-    let start_localhost = false;
+    let start_localhost = true;
     if start_localhost{
-        yew::start_app::<RootComponent>();
+        yew::start_app::<website::RootComponent>();
         return
     }
 
@@ -98,7 +102,7 @@ fn main() {
 
     let mut tesbld = WynnBuild::make_from_names(&"Dune Storm,Dondasch,Horizon,Revenant,Dispersion,Dispersion,Knucklebones,Achromatic Gloom,Oak Wood Spear".split(",").collect::<Vec<&str>>(),106).unwrap();
     println!("made test bld {}",tesbld.item_names());
-    println!("test? dam {} {:?}",tesbld.calc_melee_dam(),tesbld.skills);
+    println!("test? dam {} {:?}",tesbld.calc_melee_dam(true),tesbld.skills);
     println!("test2w? {}",items::with_name("Spring").unwrap().get_skill_reqs());
     println!("{}",wynn_data::I12x5::from([148,-151,50,151,28]).max(wynn_data::I12x5::from([120,30,-15,24,11])));
 
@@ -109,25 +113,33 @@ fn main() {
     tesbld = WynnBuild::make_with_free_spts(&[WynnItem::from_idx(2988),WynnItem::from_idx(3632),WynnItem::from_idx(2793),WynnItem::from_idx(983),WynnItem::from_idx(1678),WynnItem::from_idx(2864),WynnItem::from_idx(2641),WynnItem::from_idx(3110),WynnItem::from_idx(1302)],201).unwrap();
     println!("tesbld1 skills 2: {:?} {} {}",tesbld.skills, tesbld.skills.iter::<i32>().sum::<i32>(),tesbld.generate_hash());
 
-    tesbld = WynnBuild::from_test(&[items::with_name("Aphotic").unwrap(),items::with_name("Starglass").unwrap(),items::with_name("Vaward").unwrap(),items::with_name("Memento").unwrap(),items::with_name("Draoi Fair").unwrap(),items::with_name("Yang").unwrap(),items::with_name("Diamond Hydro Bracelet").unwrap(),items::with_name("Contrast").unwrap(),items::with_name("Spring").unwrap()],106,I12x5::ZERO).unwrap();
-    println!("tesbld aphotic 1 (negatives): {:?} {}",tesbld.skills,tesbld.generate_hash());
-    tesbld = WynnBuild::make_with_free_spts(&[items::with_name("Aphotic").unwrap(),items::with_name("Starglass").unwrap(),items::with_name("Vaward").unwrap(),items::with_name("Memento").unwrap(),items::with_name("Draoi Fair").unwrap(),items::with_name("Yang").unwrap(),items::with_name("Diamond Hydro Bracelet").unwrap(),items::with_name("Contrast").unwrap(),items::with_name("Spring").unwrap()],106).unwrap();
-    println!("tesbld aphotic 2 (negatives): {:?} {}",tesbld.skills,tesbld.generate_hash());
+    // tesbld = WynnBuild::from_test(&[items::with_name("Aphotic").unwrap(),items::with_name("Starglass").unwrap(),items::with_name("Vaward").unwrap(),items::with_name("Memento").unwrap(),items::with_name("Draoi Fair").unwrap(),items::with_name("Yang").unwrap(),items::with_name("Diamond Hydro Bracelet").unwrap(),items::with_name("Contrast").unwrap(),items::with_name("Spring").unwrap()],106,I12x5::ZERO).unwrap();
+    // println!("tesbld aphotic 1 (negatives): {:?} {}",tesbld.skills,tesbld.generate_hash());
+    // tesbld = WynnBuild::make_with_free_spts(&[items::with_name("Aphotic").unwrap(),items::with_name("Starglass").unwrap(),items::with_name("Vaward").unwrap(),items::with_name("Memento").unwrap(),items::with_name("Draoi Fair").unwrap(),items::with_name("Yang").unwrap(),items::with_name("Diamond Hydro Bracelet").unwrap(),items::with_name("Contrast").unwrap(),items::with_name("Spring").unwrap()],106).unwrap();
+    // println!("tesbld aphotic 2 (negatives): {:?} {}",tesbld.skills,tesbld.generate_hash());
 
-    tesbld = WynnBuild::from_test(&[items::with_name("Dune Storm").unwrap(),items::with_name("Elysium-Engraved Aegis").unwrap(),items::with_name("Barbarian").unwrap(),items::with_name("Revenant").unwrap(),items::with_name("Dispersion").unwrap(),items::with_name("Dispersion").unwrap(),items::with_name("Knucklebones").unwrap(),items::with_name("Incendiary").unwrap(),items::with_name("Oak Wood Spear").unwrap()],106,I12x5::ZERO).unwrap();
-    println!("tesbld dune storm 1 (negatives): {:?} {}",tesbld.skills,tesbld.generate_hash());
-    tesbld = WynnBuild::make_with_free_spts(&[items::with_name("Dune Storm").unwrap(),items::with_name("Elysium-Engraved Aegis").unwrap(),items::with_name("Barbarian").unwrap(),items::with_name("Revenant").unwrap(),items::with_name("Dispersion").unwrap(),items::with_name("Dispersion").unwrap(),items::with_name("Knucklebones").unwrap(),items::with_name("Incendiary").unwrap(),items::with_name("Oak Wood Spear").unwrap()],106).unwrap();
-    println!("tesbld dune storm 2 (negatives): {:?} {}",tesbld.skills,tesbld.generate_hash());
+    tesbld = make_build!((CONFLAGRATE, KEEPER_OF_SOULS, CINDERCHAIN, ACHILLES, DIAMOND_FIBER_RING, YIN, KNUCKLEBONES, RECALCITRANCE, GUARDIAN),105).unwrap();
+    println!("tesbld guardian 3 (negatives): {:?} {} {}",tesbld.skills,tesbld.calc_melee_dam(true),tesbld.generate_hash());
 
-    tesbld = WynnBuild::from_names_test(&"Morph-Stardust,Morph-Steel,Morph-Iron,Morph-Gold,Morph-Emerald,Morph-Topaz,Morph-Amethyst,Morph-Ruby,Oak Wood Spear".split(",").collect::<Vec<&str>>(),106).unwrap();
-    println!("tesbld morph 1 (negatives): {:?} {} {}",tesbld.skills,tesbld.calc_melee_dam(),tesbld.generate_hash());
-    tesbld = WynnBuild::make_from_names(&"Morph-Stardust,Morph-Steel,Morph-Iron,Morph-Gold,Morph-Emerald,Morph-Topaz,Morph-Amethyst,Morph-Ruby,Oak Wood Spear".split(",").collect::<Vec<&str>>(),106).unwrap();
-    println!("tesbld morph 2 (negatives): {:?} {} {}",tesbld.skills,tesbld.calc_melee_dam(),tesbld.generate_hash());
+    tesbld = make_build!({Aphotic, Starglass, Vaward, Memento, Draoi Fair, Yang, Diamond Hydro Bracelet, Contrast, Spring},106).unwrap();
+    println!("tesbld aphotic 3 (negatives): {:?} {} {}",tesbld.skills,tesbld.calc_melee_dam(true),tesbld.generate_hash());
+    tesbld = make_build!((APHOTIC, STARGLASS, VAWARD, MEMENTO, DRAOI_FAIR, YANG, DIAMOND_HYDRO_BRACELET, CONTRAST, SPRING),105).unwrap();
+    println!("tesbld aphotic 4 (negatives): {:?} {} {}\n{} {} {} {}",tesbld.skills,tesbld.calc_spell_dam(),tesbld.generate_hash(),tesbld.get_stat(Atrs::SdRaw),tesbld.get_stat(Atrs::SdPct),tesbld.get_stat(Atrs::WDamPct),tesbld.get_stat(Atrs::FDamPct));
 
-    tesbld = WynnBuild::from_names_test(&"Elf Cap,Elf Robe,Elf Pants,Elf Shoes,Oak Wood Spear".split(",").collect::<Vec<&str>>(),106).unwrap();
-    println!("tesbld elph 1: {:?} {} {}",tesbld.skills,tesbld.calc_melee_dam(),tesbld.generate_hash());
-    tesbld = WynnBuild::make_from_names(&"Elf Cap,Elf Robe,Elf Pants,Elf Shoes,Oak Wood Spear".split(",").collect::<Vec<&str>>(),106).unwrap();
-    println!("tesbld elph 2: {:?} {} {}",tesbld.skills,tesbld.calc_melee_dam(),tesbld.generate_hash());
+    // tesbld = WynnBuild::from_test(&[items::with_name("Dune Storm").unwrap(),items::with_name("Elysium-Engraved Aegis").unwrap(),items::with_name("Barbarian").unwrap(),items::with_name("Revenant").unwrap(),items::with_name("Dispersion").unwrap(),items::with_name("Dispersion").unwrap(),items::with_name("Knucklebones").unwrap(),items::with_name("Incendiary").unwrap(),items::with_name("Oak Wood Spear").unwrap()],106,I12x5::ZERO).unwrap();
+    // println!("tesbld dune storm 1 (negatives): {:?} {}",tesbld.skills,tesbld.generate_hash());
+    // tesbld = WynnBuild::make_with_free_spts(&[items::with_name("Dune Storm").unwrap(),items::with_name("Elysium-Engraved Aegis").unwrap(),items::with_name("Barbarian").unwrap(),items::with_name("Revenant").unwrap(),items::with_name("Dispersion").unwrap(),items::with_name("Dispersion").unwrap(),items::with_name("Knucklebones").unwrap(),items::with_name("Incendiary").unwrap(),items::with_name("Oak Wood Spear").unwrap()],106).unwrap();
+    // println!("tesbld dune storm 2 (negatives): {:?} {}",tesbld.skills,tesbld.generate_hash());
+
+    // tesbld = WynnBuild::from_names_test(&"Morph-Stardust,Morph-Steel,Morph-Iron,Morph-Gold,Morph-Emerald,Morph-Topaz,Morph-Amethyst,Morph-Ruby,Oak Wood Spear".split(",").collect::<Vec<&str>>(),106).unwrap();
+    // println!("tesbld morph 1 (negatives): {:?} {} {}",tesbld.skills,tesbld.calc_melee_dam(true),tesbld.generate_hash());
+    // tesbld = WynnBuild::make_from_names(&"Morph-Stardust,Morph-Steel,Morph-Iron,Morph-Gold,Morph-Emerald,Morph-Topaz,Morph-Amethyst,Morph-Ruby,Oak Wood Spear".split(",").collect::<Vec<&str>>(),106).unwrap();
+    // println!("tesbld morph 2 (negatives): {:?} {} {}",tesbld.skills,tesbld.calc_melee_dam(true),tesbld.generate_hash());
+
+    // tesbld = WynnBuild::from_names_test(&"Elf Cap,Elf Robe,Elf Pants,Elf Shoes,Oak Wood Spear".split(",").collect::<Vec<&str>>(),106).unwrap();
+    // println!("tesbld elph 1: {:?} {} {}",tesbld.skills,tesbld.calc_melee_dam(true),tesbld.generate_hash());
+    // tesbld = WynnBuild::make_from_names(&"Elf Cap,Elf Robe,Elf Pants,Elf Shoes,Oak Wood Spear".split(",").collect::<Vec<&str>>(),106).unwrap();
+    // println!("tesbld elph 2: {:?} {} {}",tesbld.skills,tesbld.calc_melee_dam(true),tesbld.generate_hash());
 
     tesbld = make_build!(&"Elf Cap,Elf Robe,Elf Pants,Elf Shoes,Oak Wood Spear".split(",").collect::<Vec<&str>>(),106,I12x5::ZERO).unwrap();
     tesbld = make_build!((ELF_CAP,ELF_ROBE,ELF_PANTS,ELF_SHOES,OAK_WOOD_SPEAR),106).unwrap();
@@ -138,10 +150,10 @@ fn main() {
 
     let stuff = atreetemp.iter_stat_bonuses();
 
-    tesbld = WynnBuild::from_names_test(&"Morph-Stardust,Libra,Aleph Null,Stardew,Prism,Summa,Succession,Diamond Fusion Necklace,Nirvana".split(",").collect::<Vec<&str>>(),106).unwrap();
-    println!("tesbld nirvana 1: {:?} {} {}",tesbld.skills,tesbld.calc_melee_dam(),tesbld.generate_hash());
-    tesbld = WynnBuild::make_from_names(&"Morph-Stardust,Libra,Aleph Null,Stardew,Prism,Summa,Succession,Diamond Fusion Necklace,Nirvana".split(",").collect::<Vec<&str>>(),106).unwrap();
-    println!("tesbld nirvana 2: {:?} {} {}",tesbld.skills,tesbld.calc_spell_dam(),tesbld.generate_hash());
+    // tesbld = WynnBuild::from_names_test(&"Morph-Stardust,Libra,Aleph Null,Stardew,Prism,Summa,Succession,Diamond Fusion Necklace,Nirvana".split(",").collect::<Vec<&str>>(),106).unwrap();
+    // println!("tesbld nirvana 1: {:?} {} {}",tesbld.skills,tesbld.calc_melee_dam(true),tesbld.generate_hash());
+    // tesbld = WynnBuild::make_from_names(&"Morph-Stardust,Libra,Aleph Null,Stardew,Prism,Summa,Succession,Diamond Fusion Necklace,Nirvana".split(",").collect::<Vec<&str>>(),106).unwrap();
+    // println!("tesbld nirvana 2: {:?} {} {}",tesbld.skills,tesbld.calc_spell_dam(),tesbld.generate_hash());
 
     if true{
         return;
@@ -203,22 +215,22 @@ fn main() {
     }
     items_with_type[6][19]=items::with_name("Derecho").unwrap();
     let num_iter: usize = 20;
-    let mut bld = WynnBuild::make_with_free_spts(&[items_with_type[0][0].clone(),items_with_type[4][5].clone()],106).unwrap();
-    bld = WynnBuild::make_with_free_spts(&[WynnItem::from_idx(2988),WynnItem::from_idx(3632),WynnItem::from_idx(2793),WynnItem::from_idx(983),WynnItem::from_idx(1678),WynnItem::from_idx(2864),WynnItem::from_idx(2641),WynnItem::from_idx(3110),WynnItem::from_idx(1302)],201).unwrap();
-    bld = WynnBuild::make_with_free_spts(&[items::with_name("Aphotic").unwrap(),items::with_name("Starglass").unwrap(),items::with_name("Vaward").unwrap(),items::with_name("Memento").unwrap(),items::with_name("Draoi Fair").unwrap(),items::with_name("Yang").unwrap(),items::with_name("Diamond Hydro Bracelet").unwrap(),items::with_name("Contrast").unwrap(),items::with_name("Spring").unwrap()],106).unwrap();
-    bld = WynnBuild::make_from_names(&"Morph-Stardust,Libra,Aleph Null,Stardew,Prism,Summa,Succession,Diamond Fusion Necklace,Nirvana".split(",").collect::<Vec<&str>>(),106).unwrap();
-    let bld_mdam = bld.calc_melee_dam();
-    let bld_sdam = bld.calc_spell_dam();
+    // let mut bld = WynnBuild::make_with_free_spts(&[items_with_type[0][0].clone(),items_with_type[4][5].clone()],106).unwrap();
+    // bld = WynnBuild::make_with_free_spts(&[WynnItem::from_idx(2988),WynnItem::from_idx(3632),WynnItem::from_idx(2793),WynnItem::from_idx(983),WynnItem::from_idx(1678),WynnItem::from_idx(2864),WynnItem::from_idx(2641),WynnItem::from_idx(3110),WynnItem::from_idx(1302)],201).unwrap();
+    // bld = WynnBuild::make_with_free_spts(&[items::with_name("Aphotic").unwrap(),items::with_name("Starglass").unwrap(),items::with_name("Vaward").unwrap(),items::with_name("Memento").unwrap(),items::with_name("Draoi Fair").unwrap(),items::with_name("Yang").unwrap(),items::with_name("Diamond Hydro Bracelet").unwrap(),items::with_name("Contrast").unwrap(),items::with_name("Spring").unwrap()],106).unwrap();
+    // bld = WynnBuild::make_from_names(&"Morph-Stardust,Libra,Aleph Null,Stardew,Prism,Summa,Succession,Diamond Fusion Necklace,Nirvana".split(",").collect::<Vec<&str>>(),106).unwrap();
+    // let bld_mdam = bld.calc_melee_dam(true);
+    // let bld_sdam = bld.calc_spell_dam();
     // println!("melee dams: n({},{}) e({},{}) t({},{}) w({},{}) f({},{}) a({},{})",bld_dams[0].0,bld_dams[0].1,bld_dams[1].0,bld_dams[1].1,bld_dams[2].0,bld_dams[2].1,bld_dams[3].0,bld_dams[3].1,bld_dams[4].0,bld_dams[4].1,bld_dams[5].0,bld_dams[5].1);
-    println!("average melee damage: {}",bld_mdam);
-    println!("average spell damage: {}",bld_sdam);
+    // println!("average melee damage: {}",bld_mdam);
+    // println!("average spell damage: {}",bld_sdam);
 
 
-    println!("{}",bld.generate_hash());
-    bld = WynnBuild::make_with_free_spts(&[items::with_name("Cancer֎").unwrap(),items::with_name("Leo").unwrap(),items::with_name("Atomizer").unwrap(),items::with_name("Statue").unwrap(),items::with_name("Diamond Solar Ring").unwrap(),items::with_name("Diamond Solar Ring").unwrap(),items::with_name("Diamond Steam Bracelet").unwrap(),items::with_name("Diamond Solar Necklace").unwrap(),items::with_name("Guardian").unwrap()],106).unwrap();
-    // bld = WynnBuild::make_with_free_spts(&[items::with_name("Heroism").unwrap(),items::with_name("Leo").unwrap(),items::with_name("Second Wind").unwrap(),items::with_name("Statue").unwrap(),items::with_name("Archaic").unwrap(),items::with_name("Archaic").unwrap(),items::with_name("Diamond Solar Bracelet").unwrap(),items::with_name("Derecho").unwrap(),items::with_name("Guardian").unwrap()],106).unwrap();
-    println!("my ehp {}",bld.calc_ehp());
-    println!("my ehp maxed {}",bld.calc_max_ehp());
+    // println!("{}",bld.generate_hash());
+    // bld = WynnBuild::make_with_free_spts(&[items::with_name("Cancer֎").unwrap(),items::with_name("Leo").unwrap(),items::with_name("Atomizer").unwrap(),items::with_name("Statue").unwrap(),items::with_name("Diamond Solar Ring").unwrap(),items::with_name("Diamond Solar Ring").unwrap(),items::with_name("Diamond Steam Bracelet").unwrap(),items::with_name("Diamond Solar Necklace").unwrap(),items::with_name("Guardian").unwrap()],106).unwrap();
+    // // bld = WynnBuild::make_with_free_spts(&[items::with_name("Heroism").unwrap(),items::with_name("Leo").unwrap(),items::with_name("Second Wind").unwrap(),items::with_name("Statue").unwrap(),items::with_name("Archaic").unwrap(),items::with_name("Archaic").unwrap(),items::with_name("Diamond Solar Bracelet").unwrap(),items::with_name("Derecho").unwrap(),items::with_name("Guardian").unwrap()],106).unwrap();
+    // println!("my ehp {}",bld.calc_ehp());
+    // println!("my ehp maxed {}",bld.calc_max_ehp());
 
     let guardian = items::with_name("Guardian").unwrap();
 
@@ -240,54 +252,54 @@ fn main() {
     }
     best_skills.reverse();
     println!("{} {} {} {} {}",best_skills[3][0],best_skills[3][1],best_skills[3][2],best_skills[3][3],best_skills[3][4]);
-    let do_loop = false;
-    if do_loop{
-        for helm in items_with_type[0].iter().take(num_iter) {
-            println!("helmet: {}, max ehp: {}",helm.name(),bld.calc_max_ehp());
-            for chest in items_with_type[1].iter().take(num_iter) {
-                for legs in items_with_type[2].iter().take(num_iter) {
-                    if WynnBuild::make_with_free_spts(&[*helm, *chest, *legs,guardian],370).is_none(){continue;}
-                    for boots in items_with_type[3].iter().take(num_iter) {
-                        let test_build = WynnBuild::make_with_base_skills(&[*helm,*chest,*legs,*boots,guardian], 200,best_skills[3].into());
-                        match test_build{
-                            Some(b) => if b.calc_max_ehp()>(bld.calc_max_ehp()).max(0.0){
-                                for r1 in items_with_type[4].iter().take(num_iter) {
-                                    for r2 in items_with_type[4].iter().take(num_iter) {
-                                        if WynnBuild::make_with_free_spts(&[*helm, *chest, *legs, *boots, *r1,guardian],260).is_none()
-                                        {
-                                            continue;
-                                        }
-                                        for brace in items_with_type[5].iter().take(num_iter) {
-                                            for neck in items_with_type[6].iter().take(num_iter)
-                                            {
-                                                let e = [*helm, *chest, *legs, *boots, *r1, *r2, *brace, *neck,guardian];
-                                                let test_build = WynnBuild::make_with_free_spts(&e, 200);
-                                                match test_build {
-                                                    Some(c) => {
-                                                        if c.calc_max_ehp()>bld.calc_max_ehp()
-                                                        {
-                                                            bld = c;
-                                                        }
-                                                    }
-                                                    None => (),
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }, None => ()
-                        }
-                    }
-                }
-            }
-        }
-    }
-    println!("{}",bld.calc_max_ehp());
-    println!("{}",bld.generate_hash());
+    // let do_loop = false;
+    // if do_loop{
+    //     for helm in items_with_type[0].iter().take(num_iter) {
+    //         println!("helmet: {}, max ehp: {}",helm.name(),bld.calc_max_ehp());
+    //         for chest in items_with_type[1].iter().take(num_iter) {
+    //             for legs in items_with_type[2].iter().take(num_iter) {
+    //                 if WynnBuild::make_with_free_spts(&[*helm, *chest, *legs,guardian],370).is_none(){continue;}
+    //                 for boots in items_with_type[3].iter().take(num_iter) {
+    //                     let test_build = WynnBuild::make_with_base_skills(&[*helm,*chest,*legs,*boots,guardian], 200,best_skills[3].into());
+    //                     match test_build{
+    //                         Some(b) => if b.calc_max_ehp()>(bld.calc_max_ehp()).max(0.0){
+    //                             for r1 in items_with_type[4].iter().take(num_iter) {
+    //                                 for r2 in items_with_type[4].iter().take(num_iter) {
+    //                                     if WynnBuild::make_with_free_spts(&[*helm, *chest, *legs, *boots, *r1,guardian],260).is_none()
+    //                                     {
+    //                                         continue;
+    //                                     }
+    //                                     for brace in items_with_type[5].iter().take(num_iter) {
+    //                                         for neck in items_with_type[6].iter().take(num_iter)
+    //                                         {
+    //                                             let e = [*helm, *chest, *legs, *boots, *r1, *r2, *brace, *neck,guardian];
+    //                                             let test_build = WynnBuild::make_with_free_spts(&e, 200);
+    //                                             match test_build {
+    //                                                 Some(c) => {
+    //                                                     if c.calc_max_ehp()>bld.calc_max_ehp()
+    //                                                     {
+    //                                                         bld = c;
+    //                                                     }
+    //                                                 }
+    //                                                 None => (),
+    //                                             }
+    //                                         }
+    //                                     }
+    //                                 }
+    //                             }
+    //                         }, None => ()
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+    // println!("{}",bld.calc_max_ehp());
+    // println!("{}",bld.generate_hash());
 
 
     let mut tesbld = WynnBuild::make_from_names(&"Dune Storm,Dondasch,Horizon,Revenant,Dispersion,Dispersion,Knucklebones,Achromatic Gloom,Oak Wood Spear".split(",").collect::<Vec<&str>>(),106).unwrap();
-    println!("test? {} {:?}",tesbld.calc_melee_dam(),tesbld.skills);
+    println!("test? {} {:?}",tesbld.calc_melee_dam(true),tesbld.skills);
     println!("testing sets {}",items::with_name("Contrast").unwrap().get_set());
     println!("starting...");
     let mut items_with_type: [Vec<WynnItem>; 8] = [Vec::new(),Vec::new(),Vec::new(),Vec::new(),Vec::new(),Vec::new(),Vec::new(),Vec::new()];
@@ -300,7 +312,7 @@ fn main() {
         
         println!("there are {} items of type {}",items_with_type[i].len(),Type::try_from(if i>4{i - 1}else{i}).unwrap());
 
-        items_with_type[i].resize(20, WynnItem::NULL);
+        items_with_type[i].resize(50, WynnItem::NULL);
         // println!("horizon {}",items_with_type[i].iter().any(|itm| itm.name()=="Horizon"));
         // println!("dune storm {}",items_with_type[i].iter().any(|itm| itm.name()=="Dune Storm"));
         // println!("knucklebones {}",items_with_type[i].iter().any(|itm| itm.name()=="Knucklebones"));
@@ -321,7 +333,7 @@ fn main() {
     }
     items_with_type[3].push(items::with_name("Horizon").unwrap());
     items_with_type[6].push(items::with_name("Knucklebones").unwrap());
-    let mut calc_future = BestBuildCalc::make(items::with_name("Oak Wood Spear").unwrap(),items_with_type);
+    let mut calc_future = best_build_calc::BestBuildCalc::make(items::with_name("Guardian").unwrap(),items_with_type,AtreeBuild::default().into(), |bld| bld.calc_melee_dam(true) as i32);
 
     while !calc_future.calc_best_build(1000000){
         println!("best so far: {}, hashval: {} \nnames {}",calc_future.curr_bests[0].0,calc_future.curr_bests[0].1.generate_hash(),calc_future.curr_bests[0].1.item_names());
@@ -329,7 +341,7 @@ fn main() {
     println!("{}",calc_future.curr_bests.len());
     println!("ehp {}",calc_future.curr_bests[0].1.calc_ehp());
     println!("dam {}",calc_future.curr_bests[0].0);
-    println!("dam2 {}",calc_future.curr_bests[0].1.calc_melee_dam());
+    println!("dam2 {}",calc_future.curr_bests[0].1.calc_melee_dam(true));
     println!("a {}",calc_future.curr_bests[0].1.overall_atk_spd());
     println!("{}",calc_future.curr_bests[0].1.item_names());
     println!("{:?}",calc_future.curr_bests[0].1.skills);
@@ -340,7 +352,7 @@ fn main() {
     println!("{}",testitm.get_ident(Atrs::MdRaw).unwrap());
     println!("85 * 1.3 = {}",85.0_f32*1.3);
     let mut tesbld = WynnBuild::make_from_names(&"Dune Storm,Dondasch,Horizon,Revenant,Dispersion,Dispersion,Knucklebones,Achromatic Gloom,Oak Wood Spear".split(",").collect::<Vec<&str>>(),106).unwrap();
-    println!("test? {} {:?}",tesbld.calc_melee_dam(),tesbld.skills);
+    println!("test? {} {:?}",tesbld.calc_melee_dam(true),tesbld.skills);
 
     // println!("again? {}",WynnBuild::make_from_names(&"Venison,Admiral,Aleph Null,Cursed Jackboots,Breezehands,Breezehands,Misalignment,Diamond Fusion Necklace,Nirvana".split(",").collect::<Vec<&str>>(),106).unwrap().calc_spell_dam());
 
@@ -675,13 +687,13 @@ impl BestBuildCalc{
             Some(b) => temp.curr_bests.push((Self::calc_ord(&b), b)),
             None => ()
         }
-        for i in 0..10{temp.curr_bests.push((22000, WynnBuild::make_from_names(&["Dune Storm", "Dondasch", "Dizzy Spell", "Revenant", "Dispersion", "Dispersion", "Knucklebones", "Diamond Static Necklace", "Oak Wood Spear"], 200).unwrap()))};
+        // for i in 0..10{temp.curr_bests.push((22000, WynnBuild::make_from_names(&["Dune Storm", "Dondasch", "Dizzy Spell", "Revenant", "Dispersion", "Dispersion", "Knucklebones", "Diamond Static Necklace", "Oak Wood Spear"], 200).unwrap()))};
         // console::log_1(&format!("start test {}",start).into());
         temp
     }
     fn calc_ord(bld: &WynnBuild) -> i32 {
         // bld.calc_spell_dam() as i32
-        bld.calc_melee_dam() as i32
+        bld.calc_melee_dam(true) as i32
     }
     fn make_build_if_reqs_met(&self, bld: &[WynnItem]) -> Option<WynnBuild>{
         match WynnBuild::make_with_skills_and_stats(bld, 200, self.best_skills[bld.len()-1], &self.best_ids[bld.len()-1]){

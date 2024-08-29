@@ -48,12 +48,17 @@ impl WynnItem {
         quality: 1.0,
         powders: 0
     };
+    /// Finds a WynnItem using its index from this module's internal constant array (items_list::ALL_ITEMS)
     pub const fn from_idx(idx: usize) -> WynnItem {
         WynnItem {
             item: items_list::ALL_ITEMS[idx],
             quality: 1.0,
             powders: 0
         }
+    }
+    /// Finds a wynn item with the given id
+    pub fn from_id(id: u32) -> Option<WynnItem>{
+        iter().find(|itm| itm.id()==id)
     }
     pub fn get_type(&self) -> Type {
         Type::try_from(if self.is_null() {
@@ -62,6 +67,12 @@ impl WynnItem {
             self.item.data_uval(Atrs::Type as usize)
         })
         .unwrap_or(Type::Helmet)
+    }
+    /// Gets the numeric identifier of this item
+    /// 
+    /// Useful to check if two items are the same (ignorning identification quality and powders)
+    pub fn id(&self) -> u32{
+        self.item.data_uval(Atrs::Id as usize)
     }
     pub fn get_category(&self) -> Category {
         Category::try_from(if self.is_null() {
@@ -74,6 +85,7 @@ impl WynnItem {
     pub fn is_null(&self) -> bool {
         self.item.data.is_empty()
     }
+    /// Returns whether this item has fixed identifications
     pub fn fixed_id(&self) -> bool {
         self.item.data.len() >= (Atrs::FixID as usize + 1) && self.item.data_atr(Atrs::FixID as usize) == Atrs::FixID as u32
     }
@@ -121,6 +133,7 @@ impl WynnItem {
             ))
         }
     }
+    /// Get an identification from this item
     pub fn get_ident(&self, ident: Atrs) -> Option<i32> {
         let id_u32 = ident as u32;
         match self.item.data.binary_search(&(id_u32 << 24)) {
@@ -148,6 +161,7 @@ impl WynnItem {
     pub fn set_quality(&mut self, qual: f32) {
         self.quality = qual
     }
+    /// Iterate through the identifications of this item
     pub fn iter_ids(&self) -> IdsIter<'_> {
         IdsIter {
             item: self,
@@ -212,6 +226,11 @@ impl std::fmt::Debug for WynnItem{
         write!(f,"WynnItem{{{}}}",self.name())
     }
 }
+impl PartialEq for WynnItem{
+    fn eq(&self, other: &Self) -> bool {
+        self.id() == other.id() && self.quality == other.quality && self.powders == other.powders
+    }
+}
 
 /// TODO: Powders
 pub struct DamsIter<'a> {
@@ -228,7 +247,7 @@ impl Iterator for DamsIter<'_> {
         let dam_data = self.item.item.data[self.curr];
         let res = (
             DamType::try_from(self.item.item.data_atr(self.curr) - Atrs::NDam as u32).unwrap_or(DamType::Neutral),
-            (dam_data & 0xFFF, (dam_data & 0xFFF000) >> 12),
+            ((dam_data & 0xFFF000) >> 12, dam_data & 0xFFF),
         );
         self.curr += 1;
         Some(res)

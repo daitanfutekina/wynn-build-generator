@@ -5,12 +5,15 @@ Created on Sun Feb 25 16:45:27 2024
 @author: irawi
 """
 
+# GOD THIS FILE SUCKS
+
 import json
 from math import floor, ceil
 import urllib.request
 import os 
 
 enums = {}
+enum_to_original_string = {}
 key_enums_types = {} # stores the value type of enums that are used as keys (Atrs, Sets, AtreeItems, EffectKeys, etc) (ie, Atrs::Hp is an int, EffectKey::Parts is a list)
 rename_enums = {"classReq" : "class","SpPct1Final" : "SpPct1", "SpPct2Final" : "SpPct2", "SpPct3Final" : "SpPct3", "SpPct4Final" : "SpPct4", 'TotalDamage' : 'Total'}
 dmg_types = ['n','e','t','w','f','a','r']
@@ -76,13 +79,17 @@ def decode_atr_data(num):
     return (enums['Atrs'][num>>24],num&0xFFFFFF)
 
 def add_enum(key, value):
+    value_original = value
     if value=="": value="None"
     value = capitalize(upper_snake_to_camel(value))
     if value in rename_enums: value = rename_enums[value]
     if key in enums:
-        if not value in enums[key]: enums[key].append(value)
+        if not value in enums[key]: 
+            enums[key].append(value)
+            enum_to_original_string[value]=value_original
     else:
         enums[key]=[value]
+        enum_to_original_string[value]=value_original
     return (key,value)
 
 def write_file(path, content):
@@ -136,7 +143,7 @@ def generate_enum(data,key,enum_name=None,ignore=[]):
         for k in data:
             generate_enum(data[k],key,enum_name,ignore)
 
-def make_enum_string(enum_name):
+def make_enum_string(enum_name, use_original_name_for_tostring = False):
     if not type(enums[enum_name][0])==str:
         print("Wrong type for making enum string:",enum_name,"with type",str(type(enum_name)))
     formatted_name = capitalize(upper_snake_to_camel(enum_name))
@@ -164,7 +171,7 @@ def make_enum_string(enum_name):
     # generates a display for the enum
     adder += "impl fmt::Display for "+formatted_name+"""{fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {write!(f,"{}",match self{"""
     for i in range(len(formatted_values)):
-        adder+=f"""{formatted_name}::{formatted_values[i]} => "{enums[enum_name][i]}", """ #String::from(
+        adder+=f"""{formatted_name}::{formatted_values[i]} => "{enum_to_original_string[enums[enum_name][i]] if use_original_name_for_tostring and enums[enum_name][i] in enum_to_original_string else enums[enum_name][i]}", """ #String::from(
     adder+="})}}"
     # adder+=f"\nimpl WynnEnum for "+formatted_name+"{const VARIENTS:&'static[Self]=}"
     adder+=f"enum_from_into!("+formatted_name+f", {base_enum_type},u32,u64,i32,i64,usize);"
@@ -405,15 +412,6 @@ class AtreeItem:
                 self.effects.append(effect_data)
 
 def setup_atree(data,for_wynn_class=None):
-    # atree_items = {"Archer":[],"Warrior":[],"Mage":[],"Assassin":[],"Shaman":[]}
-    # for wynn_class,class_atree_items in data.items():
-    #     for atree_item in class_atree_items:
-    #         atree_items[wynn_class].append(atree_item['display_name'])
-    #         add_enum(wynn_class,atree_item['display_name'])
-    #         if 'effects' in data:
-    #             for effect in data['effects']:
-    #                 if 'type' in effect:
-    #                     add_enum('EffectType',effect['type'])
     if for_wynn_class==None:
         generate_enum(data,"*.*.","AtreeKey",['req_archetype','desc','display','__TODO'])
         print("AtreeKeys",enums['AtreeKey'])
@@ -467,7 +465,7 @@ def setup_atree(data,for_wynn_class=None):
     global atree_enums
     atree_enums = ['AtreeItems','AtreeKey','Archetype','Prop','EffectKey','Spell','EffectType','BonusType','SpellPart','EffectPartKey','EffectPartType']
     class_specific_atree_enums = ['AtreeItems','Prop','Spell','SpellPart']
-    write_file(f'src\\wynn_data\\atree\\{for_wynn_class.lower()}\\mod.rs','pub (super) mod atree_data;'+enums_files_imports+'\n'.join([make_enum_string(n) for n in class_specific_atree_enums]))
+    write_file(f'src\\wynn_data\\atree\\{for_wynn_class.lower()}\\mod.rs','pub (super) mod atree_data;'+enums_files_imports+'\n'.join([make_enum_string(n, n=="AtreeItems") for n in class_specific_atree_enums]))
 
     parsed_data = []
     for atree_item in data:
@@ -490,10 +488,10 @@ def setup_atree(data,for_wynn_class=None):
         appender+='],props:&['+','.join([str(n) for n in props])
         appender+='],effects:&['+','.join([str(n) for n in effects])
         appender+='],data:&['+','.join([str(n) for n in data])
-        appender+='],phantom:PhantomData}'
+        appender+=f'],enum_id:AtreeItems::{capitalize(upper_snake_to_camel(atree_item['display_name']))}}}'
         parsed_data.append(appender)
     gen_atree_data = f"pub const ATREE_DATA: &'static[&'static AtreeItemData<{for_wynn_class}AtreeEnums>] = &["+',\n'.join(parsed_data)+"];"
-    write_file(f'src\\wynn_data\\atree\\{for_wynn_class.lower()}\\atree_data.rs',f'use super::super::{{AtreeItemData,{for_wynn_class}AtreeEnums}};use std::marker::PhantomData;\n'+gen_atree_data)
+    write_file(f'src\\wynn_data\\atree\\{for_wynn_class.lower()}\\atree_data.rs',f'use super::{{AtreeItems,super::{{AtreeItemData,{for_wynn_class}AtreeEnums}}}};\n'+gen_atree_data)
 
 
 def setup_file_from_data(data,ignore_empty=False,ignore_enums=[],ignore_keys=[]):
@@ -637,6 +635,8 @@ if __name__=='__main__':
     print("add_spell_props",tster)
     print("iterable effect keys:",tster2)
     print("replace_spells",replace_spell_data)
+
+    print(enum_to_original_string['CheaperArrowBomb'])
 
     # generate_enum(data,'*.effects.name','AtreeSpells')
     # print("#####")
