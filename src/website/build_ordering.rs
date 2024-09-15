@@ -2,13 +2,15 @@ use std::rc::Rc;
 use yew::prelude::*;
 use gloo::timers::callback::Timeout;
 use super::AutocompleteInput;
-use crate::best_build_calc::CalcOrd;
+use crate::best_build_search::{CalcStat, SearchParam};
 
 #[derive(Properties, PartialEq)]
 pub struct BuildOrdProps{
     #[prop_or_default]
     /// Callback to retrieve items when this component loses focus
-    pub on_leave: Callback<CalcOrd>,
+    pub on_leave: Callback<SearchParam>,
+    #[prop_or_default]
+    pub start_value: Option<SearchParam>
 }
 pub enum BuildOrdMsg{
     OnFocus,
@@ -18,9 +20,10 @@ pub enum BuildOrdMsg{
 }
 pub struct OptimizingStatInput{
     focused: bool,
-    selection: CalcOrd,
-    options: Vec<CalcOrd>,
+    selection: SearchParam,
+    options: Vec<SearchParam>,
     option_names: Rc<Vec<String>>,
+    option_colors: Rc<Vec<String>>,
     unfocus_handle: Option<Timeout>
 }
 impl Component for OptimizingStatInput{
@@ -28,10 +31,12 @@ impl Component for OptimizingStatInput{
 
     type Properties = BuildOrdProps;
 
-    fn create(_ctx: &Context<Self>) -> Self {
-        let options: Vec<CalcOrd> = CalcOrd::VARIENTS.to_vec();
+    fn create(ctx: &Context<Self>) -> Self {
+        let options: Vec<SearchParam> = SearchParam::all_varients();
+        let option_names = super::STAT_RENAMES.iter().map(|s| s.to_string()).collect::<Vec<String>>();
+        let option_colors = super::STAT_COLOR_CLASSES.iter().map(|s| s.to_string()).collect::<Vec<String>>();
         // items.sort_by(|a, b| a.name().cmp(b.name()));
-        OptimizingStatInput{focused: false, unfocus_handle: None, selection: CalcOrd::MeleeHit, option_names: options.iter().map(|op| op.to_string()).collect::<Vec<String>>().into(), options}
+        OptimizingStatInput{focused: false, unfocus_handle: None, selection: match ctx.props().start_value{Some(v) => v, None => SearchParam::Calc(CalcStat::MeleeHit)}, option_names: option_names.into(), option_colors: option_colors.into(),options}
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
@@ -75,7 +80,7 @@ impl Component for OptimizingStatInput{
             <>
                 <h3>{"Maximizing Stat"}</h3>
                 <div class="build-ord-area">
-                    <AutocompleteInput class={format!("build-ordering-input")} force=true limit={usize::MAX} editable=false options = {&self.option_names} on_select = {link.callback(move |(idx,_)| BuildOrdMsg::InputChanged(idx))}/>
+                    <AutocompleteInput class={format!("build-ordering-input {}",self.option_colors[self.selection.usize_id()])} char_req=0 force=true options = {&self.option_names} on_select = {link.callback(move |(idx,_)| BuildOrdMsg::InputChanged(idx))} options_classes={&self.option_colors} value={self.option_names[self.selection.usize_id()].clone()}/>
                 </div>
             </>
         };

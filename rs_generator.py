@@ -24,6 +24,8 @@ item_enums = []
 set_enums = []
 atree_enums = []
 
+num_enum_strings_made = 0
+
 iterable_types = [list, dict, tuple] # ignoring strings for now...
 
 def cameltosnake(camel_string: str) -> str:
@@ -144,6 +146,7 @@ def generate_enum(data,key,enum_name=None,ignore=[]):
             generate_enum(data[k],key,enum_name,ignore)
 
 def make_enum_string(enum_name, use_original_name_for_tostring = False):
+    global num_enum_strings_made
     if not type(enums[enum_name][0])==str:
         print("Wrong type for making enum string:",enum_name,"with type",str(type(enum_name)))
     formatted_name = capitalize(upper_snake_to_camel(enum_name))
@@ -156,8 +159,8 @@ def make_enum_string(enum_name, use_original_name_for_tostring = False):
     # adder += f"pub const VARIENTS:[Self;Self::NUM_VARIENTS]=[{','.join([f"Self::{fv}" for fv in formatted_values])}];"
     # adder+="pub fn iter() -> std::array::IntoIter<Self,"+str(len(formatted_values))+">{Self::VARIENTS.into_iter()}}\n"
     
-    adder+=f"impl WynnEnum for {formatted_name}{{const VARIENTS:&'static[Self]=&[{','.join([f"Self::{fv}" for fv in formatted_values])}];}}"
-
+    adder+=f"impl WynnEnum for {formatted_name}{{const VARIENTS:&'static[Self]=&[{','.join([f"Self::{fv}" for fv in formatted_values])}];const ENUM_TYPE_ID:u8={num_enum_strings_made};}}"
+    num_enum_strings_made+=1
     # generates a tryfrom u8 for the enum
     if len(formatted_values)<256:
         base_enum_type = "u8"
@@ -478,7 +481,7 @@ def setup_atree(data,for_wynn_class=None):
         props = setup_file_from_data(atree_item['properties'],False)
         effects = []
         for e in atree_item['effects']:
-            temp=setup_file_from_data(e,False,[['AtreeKey','AtreeItems','EffectPartType'],['AtreeKey','EffectType','Spell','EffectKey','AtreeItems']],['behavior'])
+            temp=setup_file_from_data(e,False,[['AtreeKey','AtreeItems','EffectPartType'],['AtreeKey','EffectType','Spell','EffectKey','AtreeItems'],['AtreeKey','EffectType','Spell','EffectKey','AtreeItems']],['behavior'],{'target_part' : "SpellPart"})
             effects.append(f"&[{','.join([str(n) for n in temp])}]")
         data = setup_file_from_data(atree_item,False,[],['parents','dependencies','blockers','properties','effects','desc','req_archetype','display','__TODO'])
         appender = "&AtreeItemData{name:\""+atree_item['display_name']
@@ -494,7 +497,7 @@ def setup_atree(data,for_wynn_class=None):
     write_file(f'src\\wynn_data\\atree\\{for_wynn_class.lower()}\\atree_data.rs',f'use super::{{AtreeItems,super::{{AtreeItemData,{for_wynn_class}AtreeEnums}}}};\n'+gen_atree_data)
 
 
-def setup_file_from_data(data,ignore_empty=False,ignore_enums=[],ignore_keys=[]):
+def setup_file_from_data(data,ignore_empty=False,ignore_enums=[],ignore_keys=[],use_enum_for_data_key={}):
     res=[]
     ignore = ignore_enums
     recursive_ignores = False
@@ -511,21 +514,24 @@ def setup_file_from_data(data,ignore_empty=False,ignore_enums=[],ignore_keys=[])
         return res
     unsorted_res = {}
     for key,value in data.items():
-            if ignore_empty and (type(value)==dict or type(value)==list) and len(value)==0:
-                continue
-            if key in ignore_keys:
-                continue
-            temp = get_enum_with_value(key,ignore)
-            if len(temp)==0:
-                continue
-            # print("Parsing",key,value,"as",parse_data(key,ignore_enums=ignore,key=temp[0]),parse_data(value,ignore_enums=ignore,ret_len_if_list=True))
-            parsed = (parse_data(key,ignore_enums=ignore,key=temp[0])<<24) + (parse_data(value,ignore_enums=ignore,ret_len_if_list=True) & 0xFFFFFF)
-            # res.append(parsed)
-            unsorted_res[parsed >> 24] = [parsed]
-            if (type(value)==list or type(value)==dict) and len(value)>0:
-                temp = setup_file_from_data(value,ignore_empty,ignore_enums[1::] if recursive_ignores else ignore_enums)
-                unsorted_res[parsed >> 24] = [(parsed>>24<<24)+len(temp)]
-                unsorted_res[parsed >> 24].extend(temp)
+        if ignore_empty and (type(value)==dict or type(value)==list) and len(value)==0:
+            continue
+        if key in ignore_keys:
+            continue
+        temp = get_enum_with_value(key,ignore)
+        if len(temp)==0:
+            continue
+        while len(temp)>1 and parse_data(key,ignore_enums=ignore,key=temp[0]) in unsorted_res.keys(): # safety check for overriding keys (assume we don't want to override)
+            temp.pop(0)
+        # print("Parsing",key,value,"as",parse_data(key,ignore_enums=ignore,key=temp[0]),parse_data(value,ignore_enums=ignore,ret_len_if_list=True))
+        parsed = (parse_data(key,ignore_enums=ignore,key=temp[0])<<24) + (parse_data(value,ignore_enums=ignore,key=use_enum_for_data_key[key] if key in use_enum_for_data_key else None,ret_len_if_list=True) & 0xFFFFFF)
+        
+        # res.append(parsed)
+        unsorted_res[parsed >> 24] = [parsed]        
+        if (type(value)==list or type(value)==dict) and len(value)>0:
+            temp = setup_file_from_data(value,ignore_empty,ignore_enums[1::] if recursive_ignores else ignore_enums)
+            unsorted_res[parsed >> 24] = [(parsed>>24<<24)+len(temp)]
+            unsorted_res[parsed >> 24].extend(temp)
     for key in sorted(unsorted_res):
         res.extend(unsorted_res[key])
     return res
@@ -635,8 +641,6 @@ if __name__=='__main__':
     print("add_spell_props",tster)
     print("iterable effect keys:",tster2)
     print("replace_spells",replace_spell_data)
-
-    print(enum_to_original_string['CheaperArrowBomb'])
 
     # generate_enum(data,'*.effects.name','AtreeSpells')
     # print("#####")

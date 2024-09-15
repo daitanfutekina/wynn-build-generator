@@ -45,8 +45,9 @@ impl Component for ItemInput{
     fn create(ctx: &Context<Self>) -> Self {
         let items: Vec<WynnItem> = items::iter().filter(|itm| itm.get_type()==ctx.props().item_type).collect();
         // items.sort_by(|a, b| a.name().cmp(b.name()));
+
         ItemInput{focused: false, unfocus_handle: None, 
-            selection: if ctx.props().start_value.is_empty(){vec![WynnItem::NULL; ctx.props().min_inputs]} else {ctx.props().start_value.clone()}, 
+            selection: if ctx.props().start_value.is_empty(){vec![WynnItem::NULL; ctx.props().min_inputs]} else {let mut temp = ctx.props().start_value.clone(); temp.push(WynnItem::NULL); temp}, 
             item_names: items.iter().map(|itm| itm.name().to_string()).collect::<Vec<String>>().into(), 
             item_rarities: items.iter().map(|itm| itm.get_tier().to_string()).collect::<Vec<String>>().into(), items}
     }
@@ -109,7 +110,7 @@ impl Component for ItemInput{
                 <div class="item-input-list">
                     {self.selection.iter().enumerate().map(|(i,v)|{
                         html!{
-                            <AutocompleteInput class={format!("item-list-input")} value={if v.is_null(){String::new()}else{v.name().to_string()}} unfocus_delay=250 options = {&self.item_names} on_leave = {link.callback(move |v| ItemInputMsg::InputChanged(i, v))} on_select = {link.callback(move |(idx,s)| ItemInputMsg::InputChanged(i, (Some(idx),s)))} options_classes ={&self.item_rarities}/>
+                            <AutocompleteInput class={format!("item-list-input")} stick_to_input=true value={if v.is_null(){String::new()}else{v.name().to_string()}} unfocus_delay=250 options = {&self.item_names} on_leave = {link.callback(move |v| ItemInputMsg::InputChanged(i, v))} on_select = {link.callback(move |(idx,s)| ItemInputMsg::InputChanged(i, (Some(idx),s)))} options_classes ={&self.item_rarities}/>
                         }
                     }).collect::<Html>()}
                 </div>

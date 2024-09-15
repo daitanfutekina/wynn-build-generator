@@ -11,9 +11,9 @@ use yew::prelude::*;
 // use crate::WynnBuild;
 
 mod wynn_data;
-use wynn_data::{*, builder::WynnBuild, items::*, I12x5};
+use wynn_data::{*, builder::WynnBuild, items::*, I12x5, atree::assassin::AtreeItems};
 
-mod best_build_calc;
+mod best_build_search;
 mod website;
 
 const AHH: &'static [Test2] = &[
@@ -28,7 +28,9 @@ const AHH: &'static [Test2] = &[
         c: Test::C,
     },
 ];
+// notes
 // new URLSearchParams(window.location.search);
+// ehp is broken for some reason (8/31/2024)
 fn main() {
 
     let start_localhost = true;
@@ -38,8 +40,6 @@ fn main() {
     }
 
     println!("Hello, world!");
-    println!("{}", size_of::<Atrs>());
-    println!("{}", size_of::<(u8, i32)>());
 
     // let mut items_with_type: [Vec<usize>;13] = [Vec::new(),Vec::new(),Vec::new(),Vec::new(),Vec::new(),Vec::new(),Vec::new(),Vec::new(),Vec::new(),Vec::new(),Vec::new(),Vec::new(),Vec::new()];
     // for i in 0..12_usize{
@@ -124,7 +124,7 @@ fn main() {
     tesbld = make_build!({Aphotic, Starglass, Vaward, Memento, Draoi Fair, Yang, Diamond Hydro Bracelet, Contrast, Spring},106).unwrap();
     println!("tesbld aphotic 3 (negatives): {:?} {} {}",tesbld.skills,tesbld.calc_melee_dam(true),tesbld.generate_hash());
     tesbld = make_build!((APHOTIC, STARGLASS, VAWARD, MEMENTO, DRAOI_FAIR, YANG, DIAMOND_HYDRO_BRACELET, CONTRAST, SPRING),105).unwrap();
-    println!("tesbld aphotic 4 (negatives): {:?} {} {}\n{} {} {} {}",tesbld.skills,tesbld.calc_spell_dam(),tesbld.generate_hash(),tesbld.get_stat(Atrs::SdRaw),tesbld.get_stat(Atrs::SdPct),tesbld.get_stat(Atrs::WDamPct),tesbld.get_stat(Atrs::FDamPct));
+    println!("tesbld aphotic 4 (negatives): {:?} {} {}\n{} {} {} {}",tesbld.skills,tesbld.calc_spell_dam(0),tesbld.generate_hash(),tesbld.get_stat(Atrs::SdRaw),tesbld.get_stat(Atrs::SdPct),tesbld.get_stat(Atrs::WDamPct),tesbld.get_stat(Atrs::FDamPct));
 
     // tesbld = WynnBuild::from_test(&[items::with_name("Dune Storm").unwrap(),items::with_name("Elysium-Engraved Aegis").unwrap(),items::with_name("Barbarian").unwrap(),items::with_name("Revenant").unwrap(),items::with_name("Dispersion").unwrap(),items::with_name("Dispersion").unwrap(),items::with_name("Knucklebones").unwrap(),items::with_name("Incendiary").unwrap(),items::with_name("Oak Wood Spear").unwrap()],106,I12x5::ZERO).unwrap();
     // println!("tesbld dune storm 1 (negatives): {:?} {}",tesbld.skills,tesbld.generate_hash());
@@ -145,10 +145,19 @@ fn main() {
     tesbld = make_build!((ELF_CAP,ELF_ROBE,ELF_PANTS,ELF_SHOES,OAK_WOOD_SPEAR),106).unwrap();
     tesbld = make_build!((ELF_CAP,ELF_ROBE,ELF_PANTS,ELF_SHOES,OAK_WOOD_SPEAR),106).unwrap();
 
-    let atreetemp: std::rc::Rc<atree::AtreeBuild> = atree::AtreeBuild::default().into();
-    let temp = make_build!({Morph Stardust,Libra,Aleph Null,Stardew,Prism,Summa,Succession,Diamond Fusion Necklace,Nirvana},106,I12x5::ZERO,atreetemp.clone()).unwrap();
+    println!("tesbuild elf {} {} {}",tesbld.skills,tesbld.calc_ehp(),tesbld.calc_melee_dam(false));
 
-    let stuff = atreetemp.iter_stat_bonuses();
+    let atreetemp: std::rc::Rc<atree::AtreeBuild> = atree::AtreeBuild::default().into();
+    
+    let tesitm = WynnItem::OAK_WOOD_SPEAR;
+    println!("tesitm hashing {}", WynnItem::from_hash(&tesitm.get_hash()).unwrap().name());
+
+    let temp: &[AtreeItems] = &[AtreeItems::SpinAttack,AtreeItems::Dash,AtreeItems::Multihit,AtreeItems::SmokeBomb];
+    let tesatree = AtreeBuild::from(temp);
+    println!("tesatree {} {} {} {}, spells: {:?} {:?} {:?} {:?}",tesatree.get_cost(0),tesatree.get_cost(1),tesatree.get_cost(2),tesatree.get_cost(3),tesatree.get_spell_mults(0),tesatree.get_spell_mults(1),tesatree.get_spell_mults(2),tesatree.get_spell_mults(3));
+    tesbld = make_build!((CUMULONIMBUS,LIBRA,ALEPH_NULL,STARDEW,PHOTON,SUMMA,SUCCESSION,DIAMOND_FUSION_NECKLACE,NIRVANA),106,I12x5::ZERO,tesatree.into()).unwrap();
+
+    println!("tesbld with atree {} {}",tesbld.get_spell_cost(0),tesbld.spell_per_second(0, false));
 
     // tesbld = WynnBuild::from_names_test(&"Morph-Stardust,Libra,Aleph Null,Stardew,Prism,Summa,Succession,Diamond Fusion Necklace,Nirvana".split(",").collect::<Vec<&str>>(),106).unwrap();
     // println!("tesbld nirvana 1: {:?} {} {}",tesbld.skills,tesbld.calc_melee_dam(true),tesbld.generate_hash());
@@ -333,7 +342,7 @@ fn main() {
     }
     items_with_type[3].push(items::with_name("Horizon").unwrap());
     items_with_type[6].push(items::with_name("Knucklebones").unwrap());
-    let mut calc_future = best_build_calc::BestBuildCalc::make(items::with_name("Guardian").unwrap(),items_with_type,AtreeBuild::default().into(), |bld| bld.calc_melee_dam(true) as i32);
+    let mut calc_future = best_build_search::BestBuildSearch::make(items::with_name("Guardian").unwrap(),items_with_type,AtreeBuild::default().into(), |bld| bld.calc_melee_dam(true) as i32);
 
     while !calc_future.calc_best_build(1000000){
         println!("best so far: {}, hashval: {} \nnames {}",calc_future.curr_bests[0].0,calc_future.curr_bests[0].1.generate_hash(),calc_future.curr_bests[0].1.item_names());

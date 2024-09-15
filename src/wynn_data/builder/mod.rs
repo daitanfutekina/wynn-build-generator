@@ -1,5 +1,5 @@
 use std::{collections::BinaryHeap, rc::Rc};
-use super::{*, items, items::{enums::*,WynnItem}, sets::*, atree::AtreeBuild, url_hash_val, I12x5};
+use super::{*, items, items::{enums::*,WynnItem}, sets::*, atree::AtreeBuild, url_hash_val, I12x5, unhash_to_vec};
 use crate::ref_irrelevent_struct_func;
 
 /// Represents a wynncraft build and provides methods to access and calculate stats
@@ -24,6 +24,7 @@ pub struct WynnBuild {
     assigned_skills: I12x5,
     free_sps: i32,
     items: [WynnItem; 9],
+    lvl: i32,
     atree: Rc<AtreeBuild>
 }
 impl WynnBuild {
@@ -32,9 +33,13 @@ impl WynnBuild {
         return self.stats[atr as usize-Atrs::NUM_NON_STATS];
     }
 
+    pub fn total_health(&self) -> f32{
+        (self.get_stat(Atrs::Hp)+self.get_stat(Atrs::HpBonus)+get_health_at_level(self.lvl)) as f32
+    }
+
     /// Calculates the ehp of this build
     pub fn calc_ehp(&self) -> f32{
-        let hp = (self.get_stat(Atrs::Hp)+self.get_stat(Atrs::HpBonus)+get_health_at_level(106)) as f32;
+        let hp = self.total_health();
         let class_mult: f32 = match self.items.last().unwrap_or(&WynnItem::OAK_WOOD_DAGGER).get_type(){
             Type::Wand => 5.0/6.0,
             Type::Relik => 5.0/7.0,
@@ -48,7 +53,7 @@ impl WynnBuild {
     /// 
     /// TODO: Instead, this function should determine the exact def and agi to maximize ehp, but that's more work and would run slower...
     pub fn calc_max_ehp(&self) -> f32{
-        let hp = (self.get_stat(Atrs::Hp)+self.get_stat(Atrs::HpBonus)+get_health_at_level(106)) as f32;
+        let hp = self.total_health();
         let class_mult: f32 = match self.items.last().unwrap().get_type(){
             Type::Wand => 5.0/6.0,
             Type::Relik => 5.0/7.0,
@@ -67,6 +72,17 @@ impl WynnBuild {
             (hp/(0.1*skill_to_pct(Skill::Agi, agi)+(1.0-skill_to_pct(Skill::Agi, agi))*(1.0-skill_to_pct(Skill::Def, def))))*class_mult
         }
     }
+
+    pub fn calc_ehpr(&self) -> f32{
+        let hpr = self.get_stat(Atrs::HprRaw) as f32 * ((100+self.get_stat(Atrs::HprPct)) as f32);
+        let class_mult: f32 = match self.items.last().unwrap_or(&WynnItem::OAK_WOOD_DAGGER).get_type(){
+            Type::Wand => 5.0/6.0,
+            Type::Relik => 5.0/7.0,
+            Type::Bow => 10.0/13.0,
+            _ => 1.0
+        };
+        (hpr/(0.1*skill_to_pct(Skill::Agi, self.skills.get(Skill::Agi))+(1.0-skill_to_pct(Skill::Agi, self.skills.get(Skill::Agi)))*(1.0-skill_to_pct(Skill::Def, self.skills.get(Skill::Def)))))*class_mult
+    }
     
     /// Calculates the maximum number of skill points that can be ***assigned*** to a single skill. 
     /// <br>Remember to add the result of this to the current amount of skillpoints of that skill.
@@ -80,17 +96,18 @@ impl WynnBuild {
     pub fn calc_melee_dam(&self, use_atk_spd: bool) -> f32{
         // let mut avg = (0.0,0.0);
         let m: DamageData = DamageData::melee(self,false);
-        println!("{:#?}",m.skill_dam_bonus);
-        self.calc_dam(m, false,[1.0,0.0,0.0,0.0,0.0,0.0],1) * if use_atk_spd{atk_spd_mult(self.overall_atk_spd())} else {1.0}
+        self.calc_dam(m, false,self.atree.get_melee_mults(),1) * if use_atk_spd{atk_spd_mult(self.overall_atk_spd())} else {1.0}
     }
 
     /// Calculates the average spell damage
     /// 
+    /// `spell`: calc spell damage for spell 0-3
+    /// 
     /// Note this automatically puts extra skill points into strength, then dexterity (TODO: add separate function for this option)
-    pub fn calc_spell_dam(&self) -> f32{
+    pub fn calc_spell_dam(&self, spell: usize) -> f32{
         // let mut avg = (0.0,0.0);
         let s: DamageData = DamageData::spell(self);
-        self.calc_dam(s, true, [1.6,0.0,0.0,0.0,0.2,0.0], 1)
+        self.calc_dam(s, true, if spell<=3{self.atree.get_spell_mults(spell)}else{[1.0,0.0,0.0,0.0,0.0,0.0]}, 1)
     }
 
     /// calculates the average damage of the build given some damage data 
@@ -131,19 +148,60 @@ impl WynnBuild {
         self.items.last().unwrap_or(&WynnItem::NULL).atk_spd()
     }
 
-    /// Calculates the number of a specific spell that can be cast per second (ignoring spam cost increases)
+    /// Calculates the mana cost of a spell
     /// 
-    /// `spell`: number 1 to 4
-    pub fn spell_per_second(&self, spell: usize) -> f32{
-        self.stats[Atrs::SpRaw1 as usize + spell - 1];
-        todo!()
-        // self.stats[Atrs::SpPct1 as usize + spell - 1] + 
+    /// `spell`: number 0 to 3
+    pub fn get_spell_cost(&self, spell: usize) -> f32{
+        ((self.atree.get_cost(spell) as f32 * (1.0-skill_to_pct(Skill::Int, self.skills.get(Skill::Int))) + self.stats[Atrs::SpRaw1 as usize - Atrs::NUM_NON_STATS + spell] as f32) * (100+self.stats[Atrs::SpPct1 as usize - Atrs::NUM_NON_STATS + spell]) as f32).round() / 100.0
     }
 
-    /// Generates the hash of this build, which is used by wynnbuilder's link sharing system. 
+    /// Calculates the number of a specific spell that can be cast per second (ignoring spam cost increases)
+    /// 
+    /// TODO: major ids not included (ie, this ignores transcendence)
+    /// 
+    /// `spell`: number 0 to 3<br>
+    /// `mana_steal`: true to allow mana steal, false to only use mana regen
+    pub fn spell_per_second(&self, spell: usize, mana_steal: bool) -> f32{
+        (self.get_stat(Atrs::Mr) as f32 / 5.0 + if mana_steal{self.get_stat(Atrs::Ms) as f32 / 3.0}else{0.0}) / self.get_spell_cost(spell)
+    }
+
+    /// Calculates the effective mana regen of this build (mana regen * int cost reduction)
+    pub fn calc_emr(&self) -> f32{
+        self.get_stat(Atrs::Mr) as f32 / 5.0 / (1.0-skill_to_pct(Skill::Int, self.skills.get(Skill::Int)))
+    }
+
+    /// Generates the hash of this build, which can be used to save this build in a text format
+    /// 
+    /// Use wynnbuilder_hash to get the hash used by wynnbuilder's URL sharing system
     pub fn generate_hash(&self) -> String {
         self.items.iter().enumerate().map(|(t, item)| {if item.is_null() {url_hash_val(10000 + t as i32, 3)} else {item.get_hash()}
-            }).collect::<String>() + &self.skills.iter().map(|s| url_hash_val(s, 2)).collect::<String>()+&url_hash_val(106, 2)+"000000"+"z0z0+0+0+0+0-"
+            }).collect::<String>() + &self.skills.iter().map(|s: i32| url_hash_val(s, 2)).collect::<String>()+&url_hash_val(self.lvl, 2)+"000000"+"z0z0+0+0+0+0-1T"+&self.atree.get_hash()
+    }
+
+    /// Used to transform this build into the hash used by wynnbuilder's URL sharing system
+    /// 
+    /// (this is broken, idk how wynnbuilder's atree hash works)
+    pub fn wynnbuilder_hash(&self) -> String{
+        self.items.iter().enumerate().map(|(t, item)| {if item.is_null() {url_hash_val(10000 + t as i32, 3)} else {item.get_hash()}
+            }).collect::<String>() + &self.skills.iter().map(|s: i32| url_hash_val(s, 2)).collect::<String>()+&url_hash_val(self.lvl, 2)+"000000"+"z0z0+0+0+0+0-1T"+&self.atree.get_wynnbuilder_hash()
+    }
+
+    /// Makes a build from a hash, such as from a wynnbuilder link. 
+    /// 
+    /// The hash should be of the form `hashed items` `hashed skills` `hashed level` `powders` `tomes (ignored)`
+    /// 
+    /// The atree should be manually unhashed and provided (this prevents duplicate atrees from being generated for every single wynnbuild, which would eat excessive memory)
+    /// 
+    /// note that this may falsely return None if a build cannot be made without extra skill points (ie, from tomes)
+    pub fn from_hash(hash: &str, atree: Rc<AtreeBuild>) -> Option<Self> {
+        match <WynnBuild as MakeBuild<WynnItem>>::make(&unhash_to_vec(hash.get(..27).unwrap_or("2SG2SH2SI2SJ2SK2SL2SM2SN0Vv"), 3, |hash| WynnItem::from_hash(hash).unwrap_or(WynnItem::NULL)),
+        unhash_val(hash.get(37..39).unwrap_or("1g")),
+        I12x5::ZERO,
+        atree
+        ){
+            Some(mut v) => {let temp = I12x5::from(unhash_to_vec(hash.get(27..37).unwrap_or("0000000000"), 2, |hash| unhash_val::<i32>(hash)).as_slice()); v.assigned_skills += temp-v.skills; v.free_sps=get_spts_at_level(v.lvl)-v.assigned_skills.sum(); v.skills=temp; Some(v)},
+            None => None
+        }
     }
     
     /// Generates a string containing all the names of items in this build, separated by commas. 
@@ -153,6 +211,12 @@ impl WynnBuild {
 
     pub fn iter_items(&self) -> std::slice::Iter<'_, WynnItem>{
         self.items.iter()
+    }
+
+    /// Gets an item from the build using an index which returns items in the following order:<br>
+    /// [Helmet, Chestplate, Leggings, Boots, Ring1, Ring2, Bracelet, Necklace, Weapon]
+    pub fn get_item(&self, type_idx: usize) -> WynnItem{
+        self.items[type_idx]
     }
 }
 
@@ -292,10 +356,10 @@ macro_rules! make_build(
         make_build!(&[$(crate::item_from_tt!($($item_name)+),)+] $(,$arg)*)
     };
     ($items: expr) => {
-        <$crate::builder::WynnBuild as $crate::builder::MakeBuild<_>>::make($items,106,I12x5::ZERO,$crate::atree::AtreeBuild::default().into())
+        <$crate::builder::WynnBuild as $crate::builder::MakeBuild<_>>::make($items,106,$crate::I12x5::ZERO,$crate::atree::AtreeBuild::default().into())
     };
     ($items: expr, $lvl: expr) => {
-        <$crate::builder::WynnBuild as $crate::builder::MakeBuild<_>>::make($items,$lvl,I12x5::ZERO,$crate::atree::AtreeBuild::default().into())
+        <$crate::builder::WynnBuild as $crate::builder::MakeBuild<_>>::make($items,$lvl,$crate::I12x5::ZERO,$crate::atree::AtreeBuild::default().into())
     };
     ($items: expr, $lvl: expr, $base_skills: expr) => {
         <$crate::builder::WynnBuild as $crate::builder::MakeBuild<_>>::make($items,$lvl,$base_skills,$crate::atree::AtreeBuild::default().into())
@@ -318,8 +382,9 @@ ref_irrelevent_struct_func!(WynnBuild, pub MakeBuild,
                     skills: s.1,
                     free_sps: s.0,
                     assigned_skills: s.2,
+                    lvl,
                     items: [WynnItem::NULL; 9],
-                    atree: atree
+                    atree
                 };
                 res.stats[Atrs::Hp as usize - Atrs::NUM_NON_STATS] = get_health_at_level(lvl);
                 add_items!(items, res, s);
@@ -346,6 +411,7 @@ ref_irrelevent_struct_func!(WynnBuild, pub MakeBuildWStats,
                     skills: s.1,
                     free_sps: s.0,
                     assigned_skills: s.2,
+                    lvl,
                     items: [WynnItem::NULL; 9],
                     atree: atree
                 };
@@ -451,6 +517,7 @@ impl WynnBuild{
                     skills: s.1,
                     free_sps: s.0,
                     assigned_skills: s.2,
+                    lvl: 106,
                     items: [WynnItem::NULL; 9],
                     atree: AtreeBuild::default().into()
                 };
@@ -544,6 +611,7 @@ impl WynnBuild{
                     skills: s.1,
                     free_sps: s.0,
                     assigned_skills: s.2,
+                    lvl: 106,
                     items: [WynnItem::NULL; 9],
                     atree: AtreeBuild::default().into()
                 };
@@ -577,6 +645,7 @@ impl WynnBuild{
                     skills: s.1,
                     free_sps: s.0,
                     assigned_skills: s.2,
+                    lvl: 106,
                     items: [WynnItem::NULL; 9],
                     atree: AtreeBuild::default().into()
                 };
@@ -674,6 +743,7 @@ impl WynnBuild{
                     skills: s.1,
                     free_sps: s.0,
                     assigned_skills: s.2,
+                    lvl: 106,
                     items: [WynnItem::NULL; 9],
                     atree: AtreeBuild::default().into()
                 };

@@ -33,6 +33,7 @@ impl <F: std::fmt::Debug, T: WynnEnum> std::fmt::Debug for TryIntoWynnEnumError<
 pub trait WynnEnum: Sized + std::fmt::Debug + std::fmt::Display + Clone + Copy + Default + PartialEq + std::convert::TryFrom<u32, Error=TryIntoWynnEnumError<u32,Self>> + std::convert::Into<u32> + 'static{
     const VARIENTS: &'static[Self];
     const NUM_VARIENTS:usize = Self::VARIENTS.len();
+    const ENUM_TYPE_ID:u8;
     fn iter() -> std::slice::Iter<'static, Self>{
         Self::VARIENTS.into_iter()
     }
@@ -145,12 +146,66 @@ pub const fn atk_spd_mult(spd: super::items::AtkSpd) -> f32{
 /// Used to transform data into the hashing format used by Wynnbuilder's build URL
 /// 
 /// `val` is the raw data being transformed, `n` is the number of characters each value should be converted to
-pub(crate) fn url_hash_val(val: i32, n: u8) -> String {
+/// 
+/// this might crash when using negative values
+pub fn url_hash_val<T: std::ops::ShrAssign + std::ops::BitAnd<T,Output=T> + From<u8> + TryInto<usize> + Copy + std::cmp::PartialOrd<T>>(val: T, n: u8) -> String {
     let mut result = String::new();
     let mut local_val = val;
-    for i in 0..n {
-        result = String::from(DIGITS[(local_val & 0x3f) as usize]) + &result;
-        local_val >>= 6;
+    if n==0{
+        while local_val>0.into(){
+            result = format!("{}{}",DIGITS[(local_val & 0x3f.into()).try_into().unwrap_or(0)],&result);
+            local_val >>= 6.into();
+        }
+    }
+    for _ in 0..n {
+        result = format!("{}{}",DIGITS[(local_val & 0x3f.into()).try_into().unwrap_or(0)],&result);
+        local_val >>= 6.into();
+    }
+    result
+}
+
+/// Unhashes data into a usize
+pub fn unhash_val<T: std::ops::Shl<T, Output=T> + From<u8> + std::ops::Add<T, Output=T>>(hash: &str) -> T {
+    let mut result: T = 0.into();
+    for c in hash.chars() {
+        result = (result << 6.into()) + T::from(hashed_char_idx(c))
+    }
+    result
+}
+/// Returns the index in the DIGITS array of a character (beware not to input a character not in the digits array)
+fn hashed_char_idx(c: char) -> u8{
+    let char_decimal = c as u8;
+    if 97<=char_decimal{
+        char_decimal-61
+    }else if 65<=char_decimal{
+        char_decimal-55
+    }else if 48<=char_decimal{
+        char_decimal-48
+    }else if c=='+'{
+        62
+    }else{
+        63
+    }
+}
+
+/// Unhashes a hash representing multiple of the same data into a vec of that data
+/// 
+/// # Examples
+/// ```
+/// // take a hash representing multiple wynncraft items and transform it into a Vec<WynnItem>
+/// let items: Vec<WynnItem> = unhash_to_vec(hashes, 3, |hash| WynnItem::from_hash(hash).unwrap_or(WynnItem::NULL));
+/// ```
+pub fn unhash_to_vec<T>(hashes: &str, hash_chunk_size: usize, dehash_func: fn(hash: &str) -> T) -> Vec<T>{
+    let mut extract = hashes.get(0..hash_chunk_size);
+    let mut result = Vec::new();
+    while extract.is_some(){
+        match extract{
+            Some(hash) => {
+                result.push((dehash_func)(hash));
+            }
+            None => ()
+        }
+        extract = hashes.trim().get((result.len()*hash_chunk_size)..(result.len()*hash_chunk_size+hash_chunk_size));
     }
     result
 }

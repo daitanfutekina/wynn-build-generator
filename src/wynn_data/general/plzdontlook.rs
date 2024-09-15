@@ -252,6 +252,17 @@ impl <T> std::convert::From<[T; 5]> for I12x5 where T: std::convert::Into<i64> +
         }
     }
 }
+impl <T> std::convert::From<&[T]> for I12x5 where T: std::convert::Into<i64> + Copy + Default{
+    fn from(data: &[T]) -> Self {
+        Self {
+            data: (data[0].into() & 0xFFF) << 52
+                | (data[1].into() & 0xFFF) << 39
+                | (data[2].into() & 0xFFF) << 26
+                | (data[3].into() & 0xFFF) << 13
+                | (data[4].into() & 0xFFF),
+        }
+    }
+}
 impl <T> std::convert::From<(T,T,T,T,T)> for I12x5 where T: std::convert::Into<i64> + Copy + Default{
     fn from(data: (T,T,T,T,T)) -> Self {
         Self {

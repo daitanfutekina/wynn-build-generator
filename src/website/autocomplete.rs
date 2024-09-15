@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use web_sys::HtmlInputElement;
+use web_sys::{DomRect, Element, HtmlInputElement};
 use yew::{prelude::*, virtual_dom::AttrValue};
 use gloo::timers::callback::Timeout;
 
@@ -28,9 +28,10 @@ pub struct AutocompleteInputProps{
     pub reset: bool,
     #[prop_or(10)]
     /// Limit the number of autocompletion options that are displayed.
-    /// 
-    /// Setting this to usize::MAX will display all options whenever the input has focus in whatever order they are given in the 'options' prop
     pub limit: usize,
+    #[prop_or(1)]
+    /// Number of characters required to display the autocomplete options
+    pub char_req: usize,
     #[prop_or(true)]
     /// Ignore case when autocompleting, default is true
     pub ignore_case: bool,
@@ -45,6 +46,9 @@ pub struct AutocompleteInputProps{
     #[prop_or(true)]
     /// Control whether the input field is editable by typing into it. Defaults to true. 
     pub editable: bool,
+    #[prop_or(false)]
+    /// Makes the autocomplete options box stick to the bottom edge of the input (this also matches the width of the input)
+    pub stick_to_input: bool,
     #[prop_or_default]
     /// Set a callback for when the autocomplete input gets exited (ie, after something has been inputted)
     /// 
@@ -64,8 +68,8 @@ pub struct AutocompleteInputProps{
 }
 
 pub enum AutocompleteInputMsg{
-    OnFocus,
-    OnInput(String),
+    OnFocus(Option<DomRect>),
+    OnInput(String, Option<DomRect>),
     OnSelect(usize),
     OnLeave,
     Unfocus,
@@ -73,25 +77,39 @@ pub enum AutocompleteInputMsg{
 }
 /// ```
 /// pub struct AutocompleteInputProps{
-///     #[prop_or_default]
-///     class: &'static str,
-///     #[prop_or("".into())]
-///     id: AttrValue,
-///     #[prop_or("".into())]
-///     name: AttrValue,
-///     #[prop_or("".into())]
-///     placeholder: AttrValue,
-///     #[prop_or(10)]
-///     limit: usize,
-///     #[prop_or(true)]
-///     ignore_case: bool,
-///     #[prop_or(0)]
-///     unfocus_delay: u32,
-///     #[prop_or_default]
-///     on_leave: Callback<(Option<usize>,String)>,
-///     #[prop_or_default]
-///     on_select: Callback<(usize,String)>,
-///     options: Rc<Vec<String>>,
+/// #[prop_or("".into())]
+/// pub class: AttrValue,
+/// #[prop_or("".into())]
+/// pub id: AttrValue,
+/// #[prop_or("".into())]
+/// pub name: AttrValue,
+/// #[prop_or("".into())]
+/// pub placeholder: AttrValue,
+/// #[prop_or_default]
+/// pub disabled: bool,
+/// #[prop_or("".into())]
+/// pub value: AttrValue,
+/// #[prop_or_default]
+/// pub reset: bool,
+/// #[prop_or(10)]
+/// pub limit: usize,
+/// #[prop_or(true)]
+/// pub ignore_case: bool,
+/// #[prop_or(0)]
+/// pub unfocus_delay: u32,
+/// #[prop_or_default]
+/// pub force: bool,
+/// #[prop_or(true)]
+/// pub editable: bool,
+/// #[prop_or(false)]
+/// pub stick_to_input: bool,
+/// #[prop_or_default]
+/// pub on_leave: Callback<(Option<usize>,String)>,
+/// #[prop_or_default]
+/// pub on_select: Callback<(usize,String)>,
+/// #[prop_or_default]
+/// pub options_classes: Rc<Vec<String>>,
+/// pub options: Rc<Vec<String>>,
 /// }
 /// ```
 /// <hr>
@@ -113,6 +131,7 @@ pub struct AutocompleteInput{
     display_options: Vec<(usize,String)>,
     options: Vec<String>,
     unfocus_callback_handle: Option<Timeout>,
+    input_rect: DomRect // this is a really stupid solution
 }
 impl Component for AutocompleteInput{
     type Message = AutocompleteInputMsg;
@@ -136,22 +155,23 @@ impl Component for AutocompleteInput{
             content = ctx.props().options[0].clone();
             selected = Some(0);
         }
-
-        Self{content, selected, is_focused: false, display_options: if ctx.props().limit==usize::MAX{ctx.props().options.iter().enumerate().map(|(i,v)| (i,v.clone())).collect()}else{Vec::new()}, 
-            options, unfocus_callback_handle: None}
+        Self{content, selected, is_focused: false, display_options: if ctx.props().char_req==0{ctx.props().options.iter().take(ctx.props().limit).enumerate().map(|(i,v)| (i,v.clone())).collect()}else{Vec::new()}, 
+            options, unfocus_callback_handle: None, input_rect: DomRect::new().unwrap()}
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg{
-            AutocompleteInputMsg::OnFocus => {
+            AutocompleteInputMsg::OnFocus(d) => {
                 self.unfocus_callback_handle = None;
                 self.is_focused=true;
+                match d{Some(r) => self.input_rect=r, None => ()};
                 match self.selected{
                     Some(i) => ctx.props().on_select.emit((i,self.content.clone())),
                     None => ()
                 }
             }
-            AutocompleteInputMsg::OnInput(content) => {
+            AutocompleteInputMsg::OnInput(content, input_rect) => {
+                match input_rect{Some(r) => self.input_rect=r, None => ()};
                 if !ctx.props().editable{
                     return true
                 }
@@ -166,8 +186,7 @@ impl Component for AutocompleteInput{
                 // display options that start with the input content before displaying options that just contain input content
                 let mut options1 = Vec::new();
                 let mut options2 = Vec::new();
-                if !content.is_empty()
-                {
+                if content.len()>=ctx.props().char_req{
                     for (i, v) in self.options.iter().enumerate(){
                         if v.contains(&content_clone){
                             if v.starts_with(&content_clone){
@@ -212,6 +231,8 @@ impl Component for AutocompleteInput{
                     }
 
                     ctx.props().on_leave.emit((self.selected,self.content.clone()));
+
+                    // self.display_options=Vec::new();
                 }
             },
             AutocompleteInputMsg::Unfocus => {
@@ -227,13 +248,17 @@ impl Component for AutocompleteInput{
 
     fn view(&self, ctx: &Context<Self>) -> Html{
         let link = ctx.link();
-        if ctx.props().reset && !self.is_focused &&!self.content.is_empty(){link.send_message(AutocompleteInputMsg::OnInput(String::new()))}
+        if ctx.props().reset && !self.is_focused &&!self.content.is_empty(){link.send_message(AutocompleteInputMsg::OnInput(String::new(),None))}
         let unfocusing = if self.unfocus_callback_handle.is_some() {"unfocusing"} else {""};
+        let stick_to_input = ctx.props().stick_to_input;
         let div_content = html!{
             <>
-                <input class = {format!("autocomplete-input {} {}",ctx.props().class,ctx.props().options_classes.get(self.selected.unwrap_or(usize::MAX)).unwrap_or(&String::new()))} name = {ctx.props().name.clone()} disabled={ctx.props().disabled} placeholder = {ctx.props().placeholder.clone()} onfocus={link.callback(|_| AutocompleteInputMsg::OnFocus)} oninput={link.callback(|event: InputEvent| {let input: HtmlInputElement = event.target_unchecked_into(); AutocompleteInputMsg::OnInput(input.value())})} value={self.content.clone()}/>
-                if (!self.content.is_empty() || ctx.props().limit==usize::MAX) && self.is_focused{
-                    <div class={format!("autocomplete-options-wrapper {} {}",ctx.props().class,unfocusing)}>
+                <input class = {format!("autocomplete-input {} {}",ctx.props().class,ctx.props().options_classes.get(self.selected.unwrap_or(usize::MAX)).unwrap_or(&String::new()))} 
+                name = {ctx.props().name.clone()} disabled={ctx.props().disabled} placeholder = {ctx.props().placeholder.clone()} onfocus={link.callback(move |e: FocusEvent| {let temp: Element = e.target_unchecked_into();AutocompleteInputMsg::OnFocus(if stick_to_input{Some(temp.get_bounding_client_rect())}else{None})})} 
+                oninput={link.callback(move |event: InputEvent| {let input: HtmlInputElement = event.target_unchecked_into(); AutocompleteInputMsg::OnInput(input.value(),if stick_to_input{Some(input.get_bounding_client_rect())}else{None})})} 
+                value={self.content.clone()}/>
+                if self.content.len() >= ctx.props().char_req && self.is_focused{
+                    <div class={format!("autocomplete-options-wrapper {} {}",ctx.props().class,unfocusing)} style={if stick_to_input{format!("position:fixed;top:{}px;left:{}px;width:{}px;",self.input_rect.bottom(),self.input_rect.left(),self.input_rect.width())}else{String::new()}}> //style={format!("top:{}px;left:{}px;width:{}px;",self.input_rect.bottom(),self.input_rect.left(),self.input_rect.width())}
                         <div class={format!("autocomplete-options {} {}",ctx.props().class,unfocusing)}>
                             {self.display_options.iter().enumerate().map(|(_,(i,v))|
                                 {let temp = i.clone();

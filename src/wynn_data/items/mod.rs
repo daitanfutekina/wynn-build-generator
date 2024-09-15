@@ -58,7 +58,10 @@ impl WynnItem {
     }
     /// Finds a wynn item with the given id
     pub fn from_id(id: u32) -> Option<WynnItem>{
-        iter().find(|itm| itm.id()==id)
+        iter().find(|itm| !itm.is_null() && itm.id()==id)
+    }
+    pub fn from_hash(hash: &str) -> Option<Self>{
+        Self::from_id(super::unhash_val(hash))
     }
     pub fn get_type(&self) -> Type {
         Type::try_from(if self.is_null() {
@@ -72,7 +75,8 @@ impl WynnItem {
     /// 
     /// Useful to check if two items are the same (ignorning identification quality and powders)
     pub fn id(&self) -> u32{
-        self.item.data_uval(Atrs::Id as usize)
+        if self.is_null(){0}
+        else{self.item.data_uval(Atrs::Id as usize)}
     }
     pub fn get_category(&self) -> Category {
         Category::try_from(if self.is_null() {
