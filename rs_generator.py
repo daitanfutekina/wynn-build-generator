@@ -15,7 +15,7 @@ import os
 enums = {}
 enum_to_original_string = {}
 key_enums_types = {} # stores the value type of enums that are used as keys (Atrs, Sets, AtreeItems, EffectKeys, etc) (ie, Atrs::Hp is an int, EffectKey::Parts is a list)
-rename_enums = {"classReq" : "class","SpPct1Final" : "SpPct1", "SpPct2Final" : "SpPct2", "SpPct3Final" : "SpPct3", "SpPct4Final" : "SpPct4", 'TotalDamage' : 'Total'}
+rename_enums = {"classReq" : "class","SpPct1Final" : "SpPct1", "SpPct2Final" : "SpPct2", "SpPct3Final" : "SpPct3", "SpPct4Final" : "SpPct4", 'TotalDamage' : 'Total', 'armour' : 'armor'}
 dmg_types = ['n','e','t','w','f','a','r']
 enums_files_imports = "use core::fmt;use crate::wynn_data::{WynnEnum,TryIntoWynnEnumError};use crate::enum_from_into;\n"
 get_set = {} # given an item, returns the set
@@ -579,14 +579,144 @@ def reparse_atree_data(data):
                             i+=1
     # print(atree_items["Archer"])
 
+# wynnbuilder refuses to update items so i need to partially switch to https://api.wynncraft.com/v3/item/database?fullResult for item data
+def reparse_updated_item_database(correctdata, wynnbuilderdata):
+    res = dict(correctdata)
+    for key,value in correctdata.items():
+        if not "type" in value or value['type'] not in ['armour','accessory','weapon']:
+            del res[key]
+    
+    # 'type','tier','lvl','category','id','fixID','atkSpd','slots','restrict','majorIds','allowCraftsman','classReq','set'
+    # not parsing set because idk if api.wynncraft has set data?
+    prop_renames = {'type' : 'category', 'rarity' : 'tier', 'weaponType' : 'type', 'armourType': 'type', 'accessoryType' : 'type', 'attackSpeed':'atkSpd', 'powderSlots':'slots', 'identified': 'fixID'}
+    
+    req_renames = {'level': 'lvl', 'strength': 'strReq', 'dexterity': 'dexReq','intelligence': 'intReq', 'defence': 'defReq', 'agility': 'agiReq'}
+    
+    # Str,Dex,Int,Def,Agi,NDam,EDam,TDam,WDam,FDam,ADam,Hp,EDef,TDef,WDef,FDef,ADef,DamMult,DefMult,AtkTier,DamRaw,ESteal,Expd,HealPct,HpBonus,HprPct,HprRaw,Jh,Kb,Lb,Ls,MdPct,MdRaw,Mr,Ms,Poison,Ref,SdPct,SdRaw,SlowEnemy,SpPct1,SpPct2,SpPct3,SpPct4,SpRaw1,SpRaw2,SpRaw3,SpRaw4,SpRegen,
+    # Spd,Sprint,SprintReg,Thorns,WeakenEnemy,Xpb,NDamPct,EDamPct,TDamPct,WDamPct,FDamPct,ADamPct,RDamPct,EDefPct,TDefPct,WDefPct,FDefPct,ADefPct,RDefPct,NSdRaw,ESdRaw,TSdRaw,WSdRaw,FSdRaw,ASdRaw,RSdRaw,NSdPct,ESdPct,TSdPct,WSdPct,FSdPct,ASdPct,RSdPct,NMdRaw,EMdRaw,TMdRaw,WMdRaw,FMdRaw,AMdRaw,RMdRaw,NDamRaw,EDamRaw,TDamRaw,WDamRaw,FDamRaw,ADamRaw,RDamRaw,NMdPct,EMdPct,TMdPct,WMdPct,FMdPct,AMdPct,RMdPct
+    id_renames = {'rawStrength' : 'str','rawDexterity' : 'dex','rawIntelligence' : 'int','rawDefence':'def','rawAgility':'agi',
+                  'baseHealth' : 'hp', 'rawAttackSpeed' : 'atkTier', 'rawDamage' : 'damRaw', 'stealing' : 'eSteal', 'exploding' : 'expd', 'healingEfficiency' : 'healPct', 'rawHealth' : 'hpBonus',
+                  'healthRegen' : 'hprPct', 'healthRegenRaw' : 'hprRaw', 'jumpHeight' : 'jh', 'knockback': 'kb', 'lootBonus': 'lb', 'lifeSteal' : 'ls', 'rawMainAttackDamage' : 'mdRaw',
+                  'mainAttackDamage' : 'mdPct', 'manaRegen' : 'mr', 'manaSteal' : 'ms', 'poison' : 'poison', 'reflection' : 'ref', 'rawSpellDamage' : 'sdRaw', 'spellDamage' : 'sdPct', 'slowEnemy' : 'slowEnemy', 
+                  '1stSpellCost' : 'spPct1','2ndSpellCost' : 'spPct2','3rdSpellCost' : 'spPct3','4thSpellCost' : 'spPct4','raw1stSpellCost' : 'spRaw1','raw2ndSpellCost' : 'spRaw2','raw3rdSpellCost' : 'spRaw3','raw4thSpellCost' : 'spRaw4',
+                  'walkSpeed' : 'spd', 'sprint' : 'sprint', 'sprintRegen' : 'sprintReg', 'thorns' : 'thorns', 'weakenEnemy' : 'weakenEnemy', 'xpBonus' : 'xpb', 'neutralDamage' : 'nDamPct', 
+                  'earthDamage': 'eDamPct', 'damage' : ['mdPct', 'sdPct'], 'baseDamage' : 'nDam'}
+    ele_id_renames = {'base*Defence':'*Def', 'base*Damage' : '*Dam','*Damage' : '*DamPct', 'raw*Damage' : '*DamRaw', '*Defence' : '*DefPct', 'raw*SpellDamage' : '*SdRaw', '*SpellDamage' : '*SdPct', 'raw*MainAttackDamage' : '*MdRaw', '*MainAttackDamage' : '*MdPct'}
+    elements = {'neutral':'n', 'earth':'e', 'thunder':'t', 'water':'w', 'fire':'f', 'air':'a', 'elemental' : 'r'}
+    for key, value in ele_id_renames.items():
+        for e1,e2 in elements.items(): id_renames[key.replace('*',e1 if key[0]=='*' else capitalize(e1))]=value.replace('*',e2)
+    
+    # update wynnbuilder item data if it is partially out of date
+    res2 = []
+    added_items = {}
+    max_id_found = 0
+    for itm in wynnbuilderdata['items']:
+        if itm['displayName'] in res or itm['name'] in res:
+            itm_name = itm['name'] if itm['name'] in res else itm['displayName']
+            if 'identifications' in res[itm_name].keys():
+                for k,v in res[itm_name]['identifications'].items():
+                    value = v['raw'] if type(v)==dict else v
+                    if k in id_renames:
+                        if type(id_renames[k])==list:
+                            for ident_key in id_renames[k]:
+                                itm[ident_key]=value
+                        else:
+                            itm[id_renames[k]]=value
+                    else:
+                        print("Could not find ident rename for",k)
+                        exit(1)
+            if 'base' in res[itm_name].keys():
+                for k,v in res[itm_name]['base'].items():
+                    value = f"{v['min']}-{v['max']}" if type(v)==dict and k.endswith('Damage') else v
+                    if k in id_renames:
+                        if type(id_renames[k])==list:
+                            for ident_key in id_renames[k]:
+                                itm[ident_key]=value
+                        else:
+                            itm[id_renames[k]]=value
+                    else:
+                        print("Could not find base rename for",k)
+                        exit(1)
+            if 'requirements' in res[itm_name].keys():
+                for k,v in res[itm_name]['requirements'].items():
+                    value = v['raw'] if type(v)==dict else v
+                    if k in req_renames:
+                        itm[req_renames[k]]=value
+            if 'id' in itm.keys() and itm['id']>max_id_found: max_id_found = itm['id']
+            res2.append(itm)
+            added_items[itm_name.upper()]=1
+    # add new items not yet in wynnbuilder
+    for name in res.keys():
+        if not name.upper() in added_items:
+            itm_ref = res[name]
+            itm={}
+            itm['displayName']=name
+            itm['name']=itm_ref['internalName']
+            for k,v in itm_ref.items():
+                if k in prop_renames:
+                    itm[prop_renames[k]]=v
+            if 'identifications' in itm_ref.keys():
+                for k,v in itm_ref['identifications'].items():
+                    value = v['raw'] if type(v)==dict else v
+                    if k in id_renames:
+                        if type(id_renames[k])==list:
+                            for ident_key in id_renames[k]:
+                                itm[ident_key]=value
+                        else:
+                            itm[id_renames[k]]=value
+                    else:
+                        print("Could not find ident rename for",k)
+                        exit(1)
+            if 'base' in itm_ref.keys():
+                for k,v in itm_ref['base'].items():
+                    value = f"{v['min']}-{v['max']}" if type(v)==dict and k.endswith('Damage') else v
+                    if k in id_renames:
+                        if type(id_renames[k])==list:
+                            for ident_key in id_renames[k]:
+                                itm[ident_key]=value
+                        else:
+                            itm[id_renames[k]]=value
+                    else:
+                        print("Could not find base rename for",k)
+                        exit(1)
+            if 'requirements' in itm_ref.keys():
+                for k,v in itm_ref['requirements'].items():
+                    value = v['raw'] if type(v)==dict else v
+                    if k in req_renames:
+                        itm[req_renames[k]]=value
+            max_id_found+=1
+            itm['id']=max_id_found
+            res2.append(itm)
+            added_items[name]=1
+    for itm in res2:
+        if not 'type' in itm.keys() or not 'tier' in itm.keys() or not 'lvl' in itm.keys() or not 'category' in itm.keys() or not 'id' in itm.keys():
+            print(itm)
+            exit(1)
+    return res2
+
 if __name__=='__main__':
     # f = open('items.json', 'r', encoding='utf-8')
+    try:
+        page = urllib.request.Request("https://api.wynncraft.com/v3/item/database?fullResult",headers={'User-Agent': 'Mozilla/5.0'})
+        f=urllib.request.urlopen(page)
+        fstring = f.read().decode('ISO-8859-1')
+    except urllib.error.HTTPError as e:
+        print(e)
+    try:
+        data1 = json.loads(fstring)
+    except Exception as e:
+        print(f"\n\033[1;31mError loading file: \033[93m{str(type(e))}:\033[0;0m {str(e)}\n")
+    f.close()
+    
     f = urllib.request.urlopen("https://raw.githubusercontent.com/hppeng-wynn/hppeng-wynn.github.io/dev/data/2.0.4.3/items.json")
     try:
         data = json.load(f)
     except Exception as e:
         print(f"\n\033[1;31mError loading file: \033[93m{str(type(e))}:\033[0;0m {str(e)}\n")
     f.close()
+    
+    data['items'] = reparse_updated_item_database(data1, data)
+
     print("['"+"','".join("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+-")+"']")
     print(len("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+-"))
 

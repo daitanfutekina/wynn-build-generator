@@ -170,7 +170,8 @@ struct AtreeBuildConstructor{
 /// 
 /// Note that AtreeItems are unchecked when constructing the AtreeBuild, so it is possible to have multiple of the same AtreeItem or create "invalid" atrees
 /// 
-/// TODO: add an optional safety check
+/// TODO: add an optional safety check to ensure the atree is valid
+#[derive(Default)]
 pub struct AtreeBuild{
     spells: [Spell; 5],
     stat_bonuses: Vec<(Atrs,i32)>,
@@ -220,7 +221,7 @@ impl AtreeBuild{
         }
     }
     fn setup_base_melee(&mut self){
-        self.spells[0]=Spell::melee_default();
+        self.spells[0]=Spell::melee_default(self.atree_class);
     }
     fn finalize_spells(&mut self){
         for i in 0..5{
@@ -276,11 +277,6 @@ impl PartialEq for AtreeBuild{
         self.atree_class==other.atree_class && self.atree_items_ids==other.atree_items_ids
     }
 }
-impl Default for AtreeBuild{
-    fn default() -> Self {
-        Self { spells: [Spell::melee_default(), Default::default(), Default::default(), Default::default(), Default::default()], stat_bonuses: Default::default(), stat_scalers: Default::default(), total_spell_mults: Default::default(), spell_costs: Default::default(), atree_class: Default::default(), atree_items_ids: Default::default() }
-    }
-}
 
 // might need to allow for modified atree items?
 // ie, how nighthawk's major id modifies the 'num_streams' property of arrow storm
@@ -301,6 +297,7 @@ impl <A: ClassAtreeEnums> std::iter::FromIterator<&'static AtreeItemData<A>> for
     fn from_iter<T: IntoIterator<Item = &'static AtreeItemData<A>>>(iter: T) -> Self {
         let mut res = AtreeBuild::default();
         res.atree_class=A::CLASS;
+        res.setup_base_melee();
         for itm in iter{
             for effect in itm.iter_effects(){
                 match effect.get_type(){

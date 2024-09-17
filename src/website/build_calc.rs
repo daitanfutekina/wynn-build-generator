@@ -6,7 +6,7 @@ use yew::{prelude::*, virtual_dom::AttrValue};
 use gloo::{timers::callback::Timeout, utils::document};
 
 use crate::wynn_data::{atree::AtreeBuild, builder::WynnBuild, items::{self, Category, Tier, Type, WynnItem, Atrs}, Class};
-use crate::best_build_search::{BestBuildSearch,SearchReq,SearchParam,CalcStat};
+use crate::best_build_search::{BestBuildSearch,helper_enums::{SearchReq,SearchParam,CalcStat}};
 
 use super::build_disp::BuildDisp;
 
@@ -66,6 +66,7 @@ impl Component for BuildCalcComponent{
                     SearchParam::Calc(c) => c.ord_fn_i32(),
                 });
                 self.calc.set_min_stat_requirements(ctx.props().min_reqs.clone());
+                self.calc.set_max_stat_requirements(ctx.props().max_reqs.clone());
 
                 self.calc.skip_combinations(self.progress.0);
                 self.calc.set_best_builds(self.res_builds.clone());
@@ -124,7 +125,7 @@ impl Component for BuildCalcComponent{
 impl BuildCalcComponent{
     fn save_progress(&mut self){
         let doc = document().unchecked_into::<HtmlDocument>();
-        self.res_builds = self.calc.curr_bests.iter().map(|(ord,bld)| bld.clone()).collect::<Vec<WynnBuild>>();
+        self.res_builds = self.calc.peek_curr_bests().map(|(ord,bld)| bld.clone()).collect::<Vec<WynnBuild>>();
         let _ = doc.set_cookie(&format!("CalcProgress={},{}; expires=Tue, 19 Jan 2038 03:14:07 UTC;",self.progress.0,self.res_builds.iter().map(|b| b.generate_hash()).collect::<Vec<String>>().join(",")));
     }
 }

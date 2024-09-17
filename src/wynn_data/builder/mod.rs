@@ -111,12 +111,11 @@ impl WynnBuild {
     }
 
     /// calculates the average damage of the build given some damage data 
-    /// copied from https://github.com/wynnbuilder/wynnbuilder.github.io/blob/master/js/damage_calc.js and thrown into symbolab to compress,
+    /// copied from https://github.com/wynnbuilder/wynnbuilder.github.io/blob/master/js/damage_calc.js and thrown into symbolab to simplify
     fn calc_dam(&self, d: DamageData, sp_dam: bool, mults: [f32; 6], num_hits: i32) -> f32{
         let mut avg = (0.0,0.0);
         let atk_spd_mul = if sp_dam {atk_spd_mult(self.weapon_atk_spd())} else {1.0};
         let mults_total: f32 = mults.iter().sum();
-        let add_dam = [(0.0,0.0),(0.0,0.0),(0.0,0.0),(0.0,0.0),(0.0,0.0),(0.0,0.0)]; // todo: atree ele mastery
         for i in 0_usize..6{
             let mut pct_bonus = 1.0+d.pct+d.ele_dam_pcts[i];
             let raw = (d.raw*(d.dams[i].0/d.total_dam.0)+d.ele_dam_raws[i], d.raw*(d.dams[i].1/d.total_dam.1)+d.ele_dam_raws[i]);
@@ -127,8 +126,8 @@ impl WynnBuild {
                 pct_bonus+=d.ele_dam_pcts[6]+d.skill_dam_bonus[i-1];
             }
             let mult = 1.0+d.skill_dam_bonus[0]+d.skill_dam_bonus[1];
-            avg.0+=(((weap_dam.0*atk_spd_mul+add_dam[i].0)*pct_bonus+raw.0*mults_total)*mult).max(0.0);
-            avg.1+=(((weap_dam.1*atk_spd_mul+add_dam[i].1)*pct_bonus+raw.1*mults_total)*mult).max(0.0);
+            avg.0+=(((weap_dam.0*atk_spd_mul+d.add_dam[i].0)*pct_bonus+raw.0*mults_total)*mult).max(0.0);
+            avg.1+=(((weap_dam.1*atk_spd_mul+d.add_dam[i].1)*pct_bonus+raw.1*mults_total)*mult).max(0.0);
         }
         num_hits as f32*(avg.0+avg.1)/2.0
     }
@@ -232,6 +231,7 @@ struct DamageData{
     dams: [(f32,f32); 6],
     total_dam: (f32, f32),
     skill_dam_bonus: [f32; 5],
+    add_dam: [(f32, f32); 6], // rainbow additive damage doesn't exist yet so not including it here
     raw: f32,
     pct: f32
 }
@@ -242,12 +242,14 @@ impl DamageData{
         let dam_raws_splice = bld.ids_splice(Atrs::NDamRaw, 7);
         let mdam_pcts_splice = bld.ids_splice(Atrs::NMdPct,7);
         let mdam_raws_splice = bld.ids_splice(Atrs::NMdRaw,7);
+        let add_dams_splice = bld.ids_splice(Atrs::NAddDam, 6);
 
         let mut dam_pcts: [f32; 7] = [0.0;7];
         let mut dam_raws: [f32; 7] = [0.0;7];
         let mut dams: [(f32,f32); 6] = [(0.0,0.0);6];
         let mut total_dam: (f32, f32) = (0.0,0.0);
         let mut skill_dam_bonus: [f32; 5] = [0.0; 5];
+        let mut add_dam: [(f32, f32); 6] = [(0.0, 0.0); 6];
         // todo, if str<0, just put all extra skill points into dex
         let mut sp_bonus = [bld.calc_max_skill(Skill::Str, bld.free_sps), 0];
         sp_bonus[1] = bld.calc_max_skill(Skill::Dex, bld.free_sps-sp_bonus[0]);
@@ -257,6 +259,7 @@ impl DamageData{
                 dams[i]=(bld.dams[i].0 as f32, bld.dams[i].1 as f32);
                 total_dam.0+=dams[i].0;
                 total_dam.1+=dams[i].1;
+                add_dam[i]=(((add_dams_splice[i] >> 12) & 0xFFF) as f32, (add_dams_splice[i] & 0xFFF) as f32);
                 if i<5{
                     skill_dam_bonus[i]=skill_damage_mult(Skill::VARIENTS[i], if i<2{bld.skills.get::<_,i32>(i)+sp_bonus[i]} else {bld.skills.get::<_,i32>(i)});
                 }
@@ -266,19 +269,21 @@ impl DamageData{
         }
         let melee_raw = bld.get_stat(Atrs::MdRaw) as f32 + bld.get_stat(Atrs::DamRaw) as f32;
         let melee_pct = bld.get_stat(Atrs::MdPct) as f32 / 100.0;
-        Self{ele_dam_pcts: dam_pcts, ele_dam_raws: dam_raws, dams, total_dam, skill_dam_bonus, raw: melee_raw, pct: melee_pct}
+        Self{ele_dam_pcts: dam_pcts, ele_dam_raws: dam_raws, dams, total_dam, skill_dam_bonus, raw: melee_raw, pct: melee_pct, add_dam}
     }
     fn spell(bld: &WynnBuild) -> Self{
         let dam_pcts_splice = bld.ids_splice(Atrs::NDamPct, 7);
         let dam_raws_splice = bld.ids_splice(Atrs::NDamRaw, 7);
         let sdam_pcts_splice = bld.ids_splice(Atrs::NSdPct,7);
         let sdam_raws_splice = bld.ids_splice(Atrs::NSdRaw,7);
+        let add_dams_splice = bld.ids_splice(Atrs::NAddDam, 6);
 
         let mut dam_pcts: [f32; 7] = [0.0;7];
         let mut dam_raws: [f32; 7] = [0.0;7];
         let mut dams: [(f32,f32); 6] = [(0.0,0.0);6];
         let mut total_dam: (f32, f32) = (0.0,0.0);
         let mut skill_dam_bonus: [f32; 5] = [0.0; 5];
+        let mut add_dam: [(f32, f32); 6] = [(0.0, 0.0); 6];
         let mut sp_bonus = [bld.calc_max_skill(Skill::Str, bld.free_sps), 0];
         sp_bonus[1] = bld.calc_max_skill(Skill::Dex, bld.free_sps-sp_bonus[0]);
         // let atk_spd_mul = atk_spd_mult(bld.atk_spd());
@@ -288,6 +293,7 @@ impl DamageData{
                 dams[i]=(bld.dams[i].0 as f32, bld.dams[i].1 as f32);
                 total_dam.0+=dams[i].0;
                 total_dam.1+=dams[i].1;
+                add_dam[i]=(((add_dams_splice[i] >> 12) & 0xFFF) as f32, (add_dams_splice[i] & 0xFFF) as f32);
                 if i<5{
                     skill_dam_bonus[i]=skill_damage_mult(Skill::VARIENTS[i], if i<2{bld.skills.get::<_,i32>(i)+sp_bonus[i]}else{bld.skills.get::<_,i32>(i)});
                 }
@@ -297,7 +303,7 @@ impl DamageData{
         }
         let spell_raw = bld.get_stat(Atrs::SdRaw) as f32 + bld.get_stat(Atrs::DamRaw) as f32;
         let spell_pct = bld.get_stat(Atrs::SdPct) as f32 / 100.0;
-        Self{ele_dam_pcts: dam_pcts, ele_dam_raws: dam_raws, dams, total_dam, skill_dam_bonus, raw: spell_raw, pct: spell_pct}
+        Self{ele_dam_pcts: dam_pcts, ele_dam_raws: dam_raws, dams, total_dam, skill_dam_bonus, raw: spell_raw, pct: spell_pct, add_dam}
     }
 }
 
@@ -384,9 +390,12 @@ ref_irrelevent_struct_func!(WynnBuild, pub MakeBuild,
                     assigned_skills: s.2,
                     lvl,
                     items: [WynnItem::NULL; 9],
-                    atree
+                    atree: atree.clone()
                 };
                 res.stats[Atrs::Hp as usize - Atrs::NUM_NON_STATS] = get_health_at_level(lvl);
+                for (stat, val) in atree.iter_stat_bonuses(){
+                    res.stats[*stat as usize - Atrs::NUM_NON_STATS] = *val;
+                }
                 add_items!(items, res, s);
                 Some(res)
             }
@@ -413,9 +422,12 @@ ref_irrelevent_struct_func!(WynnBuild, pub MakeBuildWStats,
                     assigned_skills: s.2,
                     lvl,
                     items: [WynnItem::NULL; 9],
-                    atree: atree
+                    atree: atree.clone()
                 };
                 res.stats[Atrs::Hp as usize - Atrs::NUM_NON_STATS] += get_health_at_level(lvl);
+                for (stat, val) in atree.iter_stat_bonuses(){
+                    res.stats[*stat as usize - Atrs::NUM_NON_STATS] = *val;
+                }
                 add_items!(items, res, s);
                 Some(res)
             }

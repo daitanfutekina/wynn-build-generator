@@ -15,11 +15,13 @@ use build_reqs_input::BuildReqsInput;
 use build_ordering::OptimizingStatInput;
 
 use crate::{make_build, wynn_data::{atree::AtreeBuild, builder::WynnBuild, items::{self, Category, Tier, Type, WynnItem}, unhash_to_vec, unhash_val, url_hash_val, Class}, WynnEnum};
-use crate::best_build_search::{BestBuildSearch, CalcStat, SearchParam, SearchReq};
-#[derive(PartialEq, Clone)]
+use crate::best_build_search::{BestBuildSearch, helper_enums::{CalcStat, SearchParam, SearchReq}};
+#[derive(PartialEq, Clone, Default)]
 pub enum Page{
+    #[default]
     Input,
-    Search
+    Search,
+    Settings
 }
 pub enum RootMsg{
     ItemsUpdate(usize, Vec<WynnItem>),
@@ -29,6 +31,7 @@ pub enum RootMsg{
     RequestPage(Page),
     SwitchPage(Page),
     BestBuildsUpdate(Vec<WynnBuild>),
+    Clear,
     None
 }
 pub struct RootComponent {
@@ -156,14 +159,18 @@ impl Component for RootComponent{
                 match to{
                     Page::Input => {
                         window().scroll_to_with_x_and_y(0.0, 0.0);
-                        self.handle = Some(Timeout::new(1000, move || link.send_message(RootMsg::SwitchPage(to))));
+                        self.handle = Some(Timeout::new(500, move || link.send_message(RootMsg::SwitchPage(to))));
                     }
                     Page::Search => {
                         if self.items.iter().all(|v| !v.is_empty()) && !self.weapon.is_null(){
                             window().scroll_to_with_x_and_y(0.0, 0.0);
                             self.save_cookies();
-                            self.handle = Some(Timeout::new(1000, move || link.send_message(RootMsg::SwitchPage(to))));    
+                            self.handle = Some(Timeout::new(500, move || link.send_message(RootMsg::SwitchPage(to))));    
                         }
+                    }
+                    Page::Settings => {
+                        window().scroll_to_with_x_and_y(0.0, 0.0);
+                        self.handle = Some(Timeout::new(500, move || link.send_message(RootMsg::SwitchPage(to))));
                     }
                 }
                 true
@@ -172,6 +179,17 @@ impl Component for RootComponent{
                 self.curr_page=to;
                 self.handle=None;
                 true
+            },
+            RootMsg::Clear => {
+                self.items=Default::default();
+                self.weapon=WynnItem::NULL;
+                self.atree=Default::default();
+                self.res_builds=Default::default();
+                self.prev_search_data=None;
+                self.min_reqs=Vec::new();
+                self.max_reqs=Vec::new();
+                self.optimizing_stat=SearchParam::Calc(CalcStat::MeleeHit);
+                false
             }
             RootMsg::None => false
         }
@@ -179,6 +197,7 @@ impl Component for RootComponent{
 
     fn view(&self, ctx: &Context<Self>) -> Html {
         let link = ctx.link();
+        let curr_page_temp = self.curr_page.clone();
         let page = match self.curr_page{
             Page::Input => html!{
                 <div class={format!("page {}",if self.handle.is_none(){""}else{"transferring-page"})}>
@@ -222,13 +241,19 @@ impl Component for RootComponent{
                     }
                 </div>
             },
+            Page::Settings => html!{
+                <div class={format!("page {}",if self.handle.is_none(){""}else{"transferring-page"})}>
+                    <p>{"todo!(\"make the settings page\")"}</p>
+                    <button onclick={link.callback(|_| RootMsg::Clear)}>{"Clear Inputs"}</button>
+                </div>
+            }
         };
         html!{
             <>
                 <div class="header">
                     <h1 onclick={link.callback(|_| RootMsg::RequestPage(Page::Input))}>{"Wynncraft Build Generator"}</h1>
                     if self.curr_page!=Page::Search{
-                        <button class="settings-button"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                        <button class="settings-button" onclick={link.callback(move |_| RootMsg::RequestPage(if curr_page_temp==Page::Settings{Page::Input}else{Page::Settings}))}><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/><circle cx="12" cy="12" r="3"/></svg></button>
                     }
                 </div>
                 {page}

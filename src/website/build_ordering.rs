@@ -2,7 +2,7 @@ use std::rc::Rc;
 use yew::prelude::*;
 use gloo::timers::callback::Timeout;
 use super::AutocompleteInput;
-use crate::best_build_search::{CalcStat, SearchParam};
+use crate::best_build_search::helper_enums::{CalcStat, SearchParam};
 
 #[derive(Properties, PartialEq)]
 pub struct BuildOrdProps{

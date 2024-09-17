@@ -1,5 +1,5 @@
-use super::{parse_data_i32, parse_data_k, parse_data_uval, AtreeItemEffect, ClassAtreeEnums, EffectKey, EffectPartKey, EffectType};
-use super::WynnEnum;
+use super::{parse_data_i32, parse_data_k, parse_data_uval, AtreeItemEffect, ClassAtreeEnums, EffectKey, EffectPartKey, EffectType, archer, assassin, mage, shaman, warrior};
+use super::{WynnEnum, Class};
 #[derive(Default, PartialEq)]
 pub struct Spell{
     cost: i32,
@@ -101,8 +101,14 @@ impl Spell{
         res
     }
     /// Makes a spell that represents the default melee values
-    pub fn melee_default() -> Self{
-        Self{cost: 0, parts: vec![SpellPart{id:1,mults:[100,0,0,0,0,0],hits:1,final_mult:100,power:0}]}
+    pub fn melee_default(class: Class) -> Self{
+        match class{
+            Class::Archer => Self{cost: 0, parts: vec![SpellPart{id:archer::SpellPart::SingleShot as u8,mults:[100,0,0,0,0,0],hits:1,final_mult:100,power:0}]},
+            Class::Warrior => Self{cost: 0, parts: vec![SpellPart{id:warrior::SpellPart::Melee as u8,mults:[100,0,0,0,0,0],hits:1,final_mult:100,power:0}]},
+            Class::Mage => Self{cost: 0, parts: vec![SpellPart{id:mage::SpellPart::Total as u8,mults:[100,0,0,0,0,0],hits:1,final_mult:100,power:0}]}, // is this right?
+            Class::Assassin => Self{cost: 0, parts: vec![SpellPart{id:assassin::SpellPart::Melee as u8,mults:[100,0,0,0,0,0],hits:1,final_mult:100,power:0}]},
+            Class::Shaman => Self{cost: 0, parts: vec![SpellPart{id:shaman::SpellPart::SingleBeam as u8,mults:[100,0,0,0,0,0],hits:1,final_mult:100,power:0}]},
+        }
     }
     fn get_target_part_idx(&self, target_id: u8) -> usize{
         self.parts.iter().position(|s| s.id==target_id).unwrap_or(self.parts.len())

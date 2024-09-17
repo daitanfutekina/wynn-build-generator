@@ -1,6 +1,9 @@
+pub mod helper_enums;
+
 use std::rc::Rc;
 
-use crate::wynn_data::{*, builder::WynnBuild, items::*, I12x5, atree::AtreeBuild};
+use crate::wynn_data::{builder::WynnBuild, items::*, I12x5, atree::AtreeBuild};
+use helper_enums::SearchReq;
 use crate::make_build;
 
 /// Structure used for calculating best builds
@@ -9,10 +12,11 @@ pub struct BestBuildSearch{
     weapon: WynnItem,
     curr: u64,
     counter_mults: [u64; 9],
-    pub curr_bests: Vec<(i32,WynnBuild)>,
+    curr_bests: Vec<(i32,WynnBuild)>,
     best_skills: Vec<I12x5>,
     best_ids: Vec<[i32; Atrs::NUM_STATS]>,
     min_stat_reqs: Vec<SearchReq>,
+    max_stat_reqs: Vec<SearchReq>,
     atree: Rc<AtreeBuild>,
     calc_ord: fn(&WynnBuild) -> i32
 }
@@ -111,7 +115,7 @@ impl BestBuildSearch{
         counter_mults.reverse();
         items_optimized_order.reverse();
         // console::log_1(&format!("skills[8] {:?} ids[8] {:?}",best_skills[8], best_ids[8]).into());
-        let mut temp = Self{items: items_optimized_order, weapon, curr: 1, counter_mults, curr_bests: Vec::new(), best_skills, best_ids, min_stat_reqs: Vec::new(), atree, calc_ord: build_ord}; // clone?
+        let mut temp = Self{items: items_optimized_order, weapon, curr: 1, counter_mults, curr_bests: Vec::new(), best_skills, best_ids, min_stat_reqs: Vec::new(), max_stat_reqs: Vec::new(), atree, calc_ord: build_ord}; // clone?
         
         // for some reason the first combination needs to be checked here in the constructor (i forget why)
         match temp.make_build_if_reqs_met(&[temp.weapon,temp.items[0][0],temp.items[1][0],temp.items[2][0],temp.items[3][0],temp.items[4][0],temp.items[5][0],temp.items[6][0],temp.items[7][0]]){
@@ -132,8 +136,11 @@ impl BestBuildSearch{
         match make_build!(bld, 106, self.best_skills[bld.len()-1], self.atree.clone(), &self.best_ids[bld.len()-1]){
             Some(b) => if self.min_stat_reqs.iter().all(|req| match req { 
                     SearchReq::Stat(atr, val) => b.get_stat(*atr)>=*val, 
-                    SearchReq::Calc(calc, val) => (calc.ord_fn_f32())(&b) >= *val }) && // user-defined stat reqs met
-                (self.curr_bests.is_empty() || (self.calc_ord)(&b)>self.curr_bests.last().unwrap().0) // better than previously found best builds
+                    SearchReq::Calc(calc, val) => (calc.ord_fn_f32())(&b) >= *val }) && // user-defined minimum stat reqs met
+                (self.curr_bests.is_empty() || (self.calc_ord)(&b)>self.curr_bests.last().unwrap().0) && // better than previously found best builds
+                (bld.len() < 9 || self.max_stat_reqs.iter().all(|req| match req { // user-defined maximum stat reqs met
+                    SearchReq::Stat(atr, val) => b.get_stat(*atr)<=*val, 
+                    SearchReq::Calc(calc, val) => (calc.ord_fn_f32())(&b) <= *val }) )
                     {Some(b)} 
                 else 
                     {None},
@@ -157,7 +164,7 @@ impl BestBuildSearch{
         // console::log_1(&format!("calcing... {}",(self.curr[0]*self.items[1].len()+self.curr[1]) as f32 / (self.items[0].len()*self.items[1].len()) as f32).into());
         let mut counter = 0;
         // console::log_1(&format!("pct {}",self.curr as f32/self.counter_mults[0] as f32).into());
-        println!("pct {}",self.curr as f32/self.counter_mults[0] as f32);
+        // println!("pct {}",self.curr as f32/self.counter_mults[0] as f32);
         let mut bld_items = [self.weapon, self.items[0][self.get_curr_item_idx(0)], self.items[1][self.get_curr_item_idx(1)], self.items[2][self.get_curr_item_idx(2)], self.items[3][self.get_curr_item_idx(3)], self.items[4][self.get_curr_item_idx(4)], self.items[5][self.get_curr_item_idx(5)], self.items[6][self.get_curr_item_idx(6)], self.items[7][self.get_curr_item_idx(7)]];
         
         // I coded this 2 months ago, no clue what's going on here. 
@@ -213,11 +220,14 @@ impl BestBuildSearch{
     pub fn peek_curr_bests(&self) -> std::slice::Iter<'_, (i32, WynnBuild)>{
         self.curr_bests.iter()
     }
+    pub fn peek_curr_best(&self) -> &(i32, WynnBuild){
+        self.curr_bests.first().unwrap()
+    }
     pub fn set_min_stat_requirements(&mut self, reqs: Vec<SearchReq>){
         self.min_stat_reqs = reqs
     }
-    pub fn set_max_stat_requirements(&mut self){
-        
+    pub fn set_max_stat_requirements(&mut self, reqs: Vec<SearchReq>){
+        self.max_stat_reqs = reqs;
     }
     pub fn skip_combinations(&mut self, skip_to: u64){
         if skip_to>0{self.curr=skip_to}
@@ -230,177 +240,6 @@ impl BestBuildSearch{
 }
 impl Default for BestBuildSearch{
     fn default() -> Self {
-        Self { items: Default::default(), weapon: WynnItem::NULL, curr: Default::default(), counter_mults: Default::default(), curr_bests: Default::default(), best_skills: Default::default(), best_ids: Default::default(), min_stat_reqs: Default::default(), atree: Default::default(), calc_ord: |bld| bld.calc_melee_dam(true) as i32}
-    }
-}
-
-
-
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum SearchParam{
-    Stat(Atrs),
-    Calc(CalcStat)
-}
-impl SearchParam{
-    pub fn all_varients() -> Vec<SearchParam>{
-        let mut res: Vec<SearchParam> = CalcStat::VARIENTS.into_iter().map(|stat| Self::Calc(stat)).collect();
-        res.extend(Atrs::iter().skip(Atrs::NUM_NON_STATS).map(|atr| Self::Stat(atr.clone())));
-        res
-    }
-    pub fn usize_id(&self) -> usize{
-        match self{
-            Self::Stat(a) => CalcStat::NUM_VARIENTS + *a as usize - Atrs::NUM_NON_STATS,
-            Self::Calc(b) => b.clone() as usize
-        }
-    }
-    pub fn from_usize(id: usize) -> Self{
-        if id < CalcStat::NUM_VARIENTS{
-            Self::Calc(CalcStat::VARIENTS[id])
-        }else{
-            Self::Stat(Atrs::VARIENTS[id-CalcStat::NUM_VARIENTS+Atrs::NUM_NON_STATS])
-        }
-    }
-}
-impl std::fmt::Display for SearchParam{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f,"{}",match self{
-            Self::Stat(atr) => atr.to_string(), 
-            Self::Calc(calc) => calc.to_string()
-        })
-    }
-}
-#[derive(Clone, Copy, PartialEq)]
-pub enum SearchReq{
-    Stat(Atrs, i32),
-    Calc(CalcStat, f32)
-}
-impl SearchReq{
-    pub fn stat_eq(&self, other: &Self) -> bool{
-        match self{
-            Self::Stat(a, _) => match other{Self::Stat(b, _) => a==b, _ => false}
-            Self::Calc(a, _) => match other{Self::Calc(b, _) => a==b, _ => false}
-        }
-    }
-    pub fn name_and_val(&self) -> (String, f32){
-        match self{
-            Self::Stat(a, v) => (a.to_string(), *v as f32),
-            Self::Calc(c, v) => (c.to_string(), *v)
-        }
-    }
-    pub fn debug_name_and_val(&self) -> (String, f32){
-        match self{
-            Self::Stat(a, v) => (a.to_string(), *v as f32),
-            Self::Calc(c, v) => (format!("{:#?}",c), *v)
-        }
-    }
-    pub fn usize_id(&self) -> usize{
-        match self{
-            Self::Stat(a, _) => {let temp: usize = (*a).into(); CalcStat::NUM_VARIENTS + temp - Atrs::NUM_NON_STATS},
-            Self::Calc(b, _) => b.clone() as usize
-        }
-    }
-    pub fn from_usize_and_f32(id: usize, val: f32) -> Self{
-        if id < CalcStat::NUM_VARIENTS{
-            Self::Calc(CalcStat::VARIENTS[id], val)
-        }else{
-            Self::Stat(Atrs::VARIENTS[id-CalcStat::NUM_VARIENTS+Atrs::NUM_NON_STATS], val as i32)
-        }
-    }
-    pub fn from_usize_and_i32(id: usize, val: i32) -> Self{
-        if id < CalcStat::NUM_VARIENTS{
-            Self::Calc(CalcStat::VARIENTS[id], val as f32)
-        }else{
-            Self::Stat(Atrs::VARIENTS[id-CalcStat::NUM_VARIENTS+Atrs::NUM_NON_STATS], val)
-        }
-    }
-}
-impl std::fmt::Debug for SearchReq{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f,"{}",
-        match self{
-            Self::Stat(a, v) => format!("{} : {}", a, v),
-            Self::Calc(s, v) => format!("{} : {}", s,v)
-        })
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum CalcStat{
-    MeleeHit,
-    MeleeDps,
-    /// General spell damage (ie, the spell damage you would do without any spell-specific damage multipliers)
-    SpGenDmg,
-    Sp1Dmg,
-    Sp2Dmg,
-    Sp3Dmg,
-    Sp4Dmg,
-    Sp1PerSec,
-    Sp2PerSec,
-    Sp3PerSec,
-    Sp4PerSec,
-    Emr,
-    Ehp,
-    Ehpr
-}
-
-impl CalcStat{
-    pub const VARIENTS: [Self; 14] = [Self::MeleeHit, Self::MeleeDps, Self::SpGenDmg, Self::Sp1Dmg, Self::Sp2Dmg, Self::Sp3Dmg, Self::Sp4Dmg, 
-    Self::Sp1PerSec, Self::Sp2PerSec, Self::Sp3PerSec, Self::Sp4PerSec, Self::Emr, Self::Ehp, Self::Ehpr];
-    pub const NUM_VARIENTS: usize = Self::VARIENTS.len();
-    pub fn ord_fn_f32(&self) -> fn(&WynnBuild) -> f32{
-        match self{
-            Self::MeleeHit => |bld| bld.calc_melee_dam(false),
-            Self::MeleeDps => |bld| bld.calc_melee_dam(true),
-            Self::SpGenDmg => |bld| bld.calc_spell_dam(100),
-            Self::Sp1Dmg => |bld| bld.calc_spell_dam(0),
-            Self::Sp2Dmg => |bld| bld.calc_spell_dam(1),
-            Self::Sp3Dmg => |bld| bld.calc_spell_dam(2),
-            Self::Sp4Dmg => |bld| bld.calc_spell_dam(3),
-            Self::Sp1PerSec => |bld| bld.spell_per_second(0, false),
-            Self::Sp2PerSec => |bld| bld.spell_per_second(1, false),
-            Self::Sp3PerSec => |bld| bld.spell_per_second(2, false),
-            Self::Sp4PerSec => |bld| bld.spell_per_second(3, false),
-            Self::Emr => |bld| bld.calc_emr(),
-            Self::Ehp => |bld| bld.calc_max_ehp(),
-            Self::Ehpr => |bld| bld.calc_ehpr(),
-        }
-    }
-    pub fn ord_fn_i32(&self) -> fn(&WynnBuild) -> i32{
-        match self{
-            Self::MeleeHit => |bld| bld.calc_melee_dam(false) as i32,
-            Self::MeleeDps => |bld| bld.calc_melee_dam(true) as i32,
-            Self::SpGenDmg => |bld| bld.calc_spell_dam(100) as i32,
-            Self::Sp1Dmg => |bld| bld.calc_spell_dam(0) as i32,
-            Self::Sp2Dmg => |bld| bld.calc_spell_dam(1) as i32,
-            Self::Sp3Dmg => |bld| bld.calc_spell_dam(2) as i32,
-            Self::Sp4Dmg => |bld| bld.calc_spell_dam(3) as i32,
-            Self::Sp1PerSec => |bld| (bld.spell_per_second(0, false) * 100.0) as i32,
-            Self::Sp2PerSec => |bld| (bld.spell_per_second(1, false) * 100.0) as i32,
-            Self::Sp3PerSec => |bld| (bld.spell_per_second(2, false) * 100.0) as i32,
-            Self::Sp4PerSec => |bld| (bld.spell_per_second(3, false) * 100.0) as i32,
-            Self::Emr => |bld| bld.calc_emr() as i32,
-            Self::Ehp => |bld| bld.calc_max_ehp() as i32,
-            Self::Ehpr => |bld| bld.calc_ehpr() as i32,
-        }
-    }
-}
-impl std::fmt::Display for CalcStat{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f,"{}",match self{
-            Self::MeleeHit=>"Melee Single Hit",
-            Self::MeleeDps => "Melee Dps",
-            Self::SpGenDmg => "Base Spell Damage",
-            Self::Sp1Dmg => "Spell 1 Damage",
-            Self::Sp2Dmg => "Spell 2 Damage",
-            Self::Sp3Dmg => "Spell 3 Damage",
-            Self::Sp4Dmg => "Spell 4 Damage",
-            Self::Sp1PerSec => "Spell 1 / sec",
-            Self::Sp2PerSec => "Spell 2 / sec",
-            Self::Sp3PerSec => "Spell 3 / sec",
-            Self::Sp4PerSec => "Spell 4 / sec",
-            Self::Emr => "Effective Mana Regen",
-            Self::Ehp => "Effective HP", 
-            Self::Ehpr => "Effective HP Regen", 
-        })
+        Self { items: Default::default(), weapon: WynnItem::NULL, curr: Default::default(), counter_mults: Default::default(), curr_bests: Default::default(), best_skills: Default::default(), best_ids: Default::default(), min_stat_reqs: Default::default(), max_stat_reqs: Default::default(), atree: Default::default(), calc_ord: |bld| bld.calc_melee_dam(true) as i32}
     }
 }

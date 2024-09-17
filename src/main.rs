@@ -32,7 +32,6 @@ const AHH: &'static [Test2] = &[
 // new URLSearchParams(window.location.search);
 // ehp is broken for some reason (8/31/2024)
 fn main() {
-
     let start_localhost = true;
     if start_localhost{
         yew::start_app::<website::RootComponent>();
@@ -345,16 +344,15 @@ fn main() {
     let mut calc_future = best_build_search::BestBuildSearch::make(items::with_name("Guardian").unwrap(),items_with_type,AtreeBuild::default().into(), |bld| bld.calc_melee_dam(true) as i32);
 
     while !calc_future.calc_best_build(1000000){
-        println!("best so far: {}, hashval: {} \nnames {}",calc_future.curr_bests[0].0,calc_future.curr_bests[0].1.generate_hash(),calc_future.curr_bests[0].1.item_names());
+        println!("best so far: {}, hashval: {} \nnames {}",calc_future.peek_curr_best().0,calc_future.peek_curr_best().1.generate_hash(),calc_future.peek_curr_best().1.item_names());
     }
-    println!("{}",calc_future.curr_bests.len());
-    println!("ehp {}",calc_future.curr_bests[0].1.calc_ehp());
-    println!("dam {}",calc_future.curr_bests[0].0);
-    println!("dam2 {}",calc_future.curr_bests[0].1.calc_melee_dam(true));
-    println!("a {}",calc_future.curr_bests[0].1.overall_atk_spd());
-    println!("{}",calc_future.curr_bests[0].1.item_names());
-    println!("{:?}",calc_future.curr_bests[0].1.skills);
-    println!("{}",calc_future.curr_bests[0].1.generate_hash());
+    println!("ehp {}",calc_future.peek_curr_best().1.calc_ehp());
+    println!("dam {}",calc_future.peek_curr_best().0);
+    println!("dam2 {}",calc_future.peek_curr_best().1.calc_melee_dam(true));
+    println!("a {}",calc_future.peek_curr_best().1.overall_atk_spd());
+    println!("{}",calc_future.peek_curr_best().1.item_names());
+    println!("{:?}",calc_future.peek_curr_best().1.skills);
+    println!("{}",calc_future.peek_curr_best().1.generate_hash());
 
     let mut testitm = items::with_name("Dispersion").unwrap();
     testitm.set_quality(0.7);

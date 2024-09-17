@@ -4,7 +4,7 @@ use web_sys::HtmlInputElement;
 use yew::prelude::*;
 use gloo::timers::callback::Timeout;
 
-use crate::best_build_search::SearchReq;
+use crate::best_build_search::helper_enums::SearchReq;
 use super::AutocompleteInput;
 
 #[derive(Properties, PartialEq)]
@@ -67,12 +67,11 @@ impl Component for BuildReqsInput{
             },
             BuildReqsMsg::OrdToggle => {
                 self.unfocus_handle=None;
-                // this functionality is still a WIP
-                // if self.curr_ord_input==Ordering::Less{
-                //     self.curr_ord_input=Ordering::Greater
-                // }else{
-                //     self.curr_ord_input=Ordering::Less
-                // }
+                if self.curr_ord_input==Ordering::Less{
+                    self.curr_ord_input=Ordering::Greater
+                }else{
+                    self.curr_ord_input=Ordering::Less
+                }
                 self.reset_input = false;
             },
             BuildReqsMsg::AddReq => {
