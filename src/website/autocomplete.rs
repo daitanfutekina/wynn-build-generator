@@ -129,7 +129,7 @@ pub struct AutocompleteInput{
     selected: Option<usize>,
     is_focused: bool,
     display_options: Vec<(usize,String)>,
-    options: Vec<String>,
+    // options: Vec<String>,
     unfocus_callback_handle: Option<Timeout>,
     input_rect: DomRect // this is a really stupid solution
 }
@@ -155,8 +155,7 @@ impl Component for AutocompleteInput{
             content = ctx.props().options[0].clone();
             selected = Some(0);
         }
-        Self{content, selected, is_focused: false, display_options: if ctx.props().char_req==0{ctx.props().options.iter().take(ctx.props().limit).enumerate().map(|(i,v)| (i,v.clone())).collect()}else{Vec::new()}, 
-            options, unfocus_callback_handle: None, input_rect: DomRect::new().unwrap()}
+        Self{content, selected, is_focused: false, display_options: if ctx.props().char_req==0{ctx.props().options.iter().take(ctx.props().limit).enumerate().map(|(i,v)| (i,v.clone())).collect()}else{Vec::new()}, unfocus_callback_handle: None, input_rect: DomRect::new().unwrap()}
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
@@ -187,18 +186,36 @@ impl Component for AutocompleteInput{
                 let mut options1 = Vec::new();
                 let mut options2 = Vec::new();
                 if content.len()>=ctx.props().char_req{
-                    for (i, v) in self.options.iter().enumerate(){
-                        if v.contains(&content_clone){
-                            if v.starts_with(&content_clone){
-                                if v.len()==content_clone.len(){
-                                    self.selected=Some(i);
-                                    ctx.props().on_select.emit((i,ctx.props().options[i].clone()));
+                    if ctx.props().ignore_case{ // this is a really stupid if statement (duplicate code is ugly...)
+                        for (i, v) in ctx.props().options.iter().enumerate(){
+                            let v = v.to_ascii_uppercase();
+                            if v.contains(&content_clone){
+                                if v.starts_with(&content_clone){
+                                    if v.len()==content_clone.len(){
+                                        self.selected=Some(i);
+                                        ctx.props().on_select.emit((i,ctx.props().options[i].clone()));
+                                    }
+                                    options1.push((i,ctx.props().options[i].clone()));
+                                }else{
+                                    options2.push((i,ctx.props().options[i].clone()));
                                 }
-                                options1.push((i,ctx.props().options[i].clone()));
-                            }else{
-                                options2.push((i,ctx.props().options[i].clone()));
+                                if options1.len() >= ctx.props().limit {break}
                             }
-                            if options1.len() >= ctx.props().limit {break}
+                        }
+                    }else{
+                        for (i, v) in ctx.props().options.iter().enumerate(){
+                            if v.contains(&content_clone){
+                                if v.starts_with(&content_clone){
+                                    if v.len()==content_clone.len(){
+                                        self.selected=Some(i);
+                                        ctx.props().on_select.emit((i,ctx.props().options[i].clone()));
+                                    }
+                                    options1.push((i,ctx.props().options[i].clone()));
+                                }else{
+                                    options2.push((i,ctx.props().options[i].clone()));
+                                }
+                                if options1.len() >= ctx.props().limit {break}
+                            }
                         }
                     }
                 }
@@ -285,7 +302,7 @@ impl Component for AutocompleteInput{
                 <div class={format!("autocomplete-wrapper {}",ctx.props().class)} id={ctx.props().id.clone()} onblur={link.callback(|_| AutocompleteInputMsg::OnLeave)} onkeypress={link.callback(|key:KeyboardEvent| {if key.char_code()==13 {AutocompleteInputMsg::OnLeave} else {AutocompleteInputMsg::None}})}>
                     {div_content}
                 </div>
-            }
+            } //|c: char| match content_iter.next(){Some(v) => c.eq_ignore_ascii_case(&v), None => false}
         }
     }
 }

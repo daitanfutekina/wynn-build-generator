@@ -116,10 +116,6 @@ impl Component for AtreeInput{
     fn view(&self, ctx: &Context<Self>) -> Html {
         let link = ctx.link();
 
-        if self.curr_class!=ctx.props().class{
-            link.send_message(AtreeInputMsg::UpdateClass);
-        }
-
         let div_content = html!{
             <>
                 <h3>{"Atree (work in progress)"}</h3>
@@ -144,6 +140,13 @@ impl Component for AtreeInput{
                 {div_content}
             </div>
         }
+    }
+    fn changed(&mut self, ctx: &Context<Self>) -> bool {
+        if self.curr_class!=ctx.props().class{
+            let link = ctx.link();
+            link.send_message(AtreeInputMsg::UpdateClass);
+        }
+        false
     }
 }
 
