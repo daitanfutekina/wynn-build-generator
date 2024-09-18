@@ -228,7 +228,7 @@ impl Component for RootComponent{
                     // {format!("{:#?} {:#?} {:#?} {:#?} {:#?}",self.items,self.weapon, self.min_reqs,self.max_reqs,self.optimizing_stat)}
                     // </div>
                     <div class="bottom">
-                    {format!("{:#?} {:#?} {}",self.atree.get_hash(),self.atree.get_melee_mults(),self.atree.get_cost(0))}
+                    // {format!("{:#?} {:#?} {}",self.atree.get_hash(),self.atree.get_melee_mults(),self.atree.get_cost(0))}
                     </div>
                 </div>
             },
