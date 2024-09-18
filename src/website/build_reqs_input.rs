@@ -157,9 +157,9 @@ impl Component for BuildReqsInput{
                     ).collect::<Html>()}
                     <br/>
                     <div class="stat-input-wrapper" onkeypress={link.callback(|key:KeyboardEvent| {if key.char_code()==13 {BuildReqsMsg::AddReq} else {BuildReqsMsg::None}})} onblur={link.callback(|_| BuildReqsMsg::AddReq)}>
-                    <AutocompleteInput class={format!("stat-input")} reset={self.reset_input} options = {&self.stat_names} on_leave = {link.callback(move |(op, _)| BuildReqsMsg::StatInput(op))} options_classes ={&self.stat_colors}/>
+                    <AutocompleteInput class={format!("stat-input")} placeholder="Insert a Stat" reset={self.reset_input} options = {&self.stat_names} on_leave = {link.callback(move |(op, _)| BuildReqsMsg::StatInput(op))} options_classes ={&self.stat_colors}/>
                     <button class="comparator" onclick = {link.callback(|_| BuildReqsMsg::OrdToggle)}>{match self.curr_ord_input{Ordering::Greater => ">", Ordering::Less => "<", Ordering::Equal => "="}}</button>
-                    <input class="num-input" oninput={link.callback(|event: InputEvent| {let input: HtmlInputElement = event.target_unchecked_into(); BuildReqsMsg::NumInput(input.value())})} value = {self.curr_num_input.clone()}/>
+                    <input class="num-input" placeholder="Number" oninput={link.callback(|event: InputEvent| {let input: HtmlInputElement = event.target_unchecked_into(); BuildReqsMsg::NumInput(input.value())})} value = {self.curr_num_input.clone()}/>
                     </div>
                 </div>
             </>

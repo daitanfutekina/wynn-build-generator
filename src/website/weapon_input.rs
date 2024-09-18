@@ -95,7 +95,7 @@ impl Component for WeaponInput{
                 <h3>{"Weapon"}</h3>
                 <img src={format!("images/wynn-{}.png",item_type.to_string().to_lowercase())}/>
                 <div class="weapon-selection-area">
-                    <AutocompleteInput class={format!("weapon-input")} value={match self.selection{Some(v) => v.name().to_string(), None => String::new()}} options = {&self.item_names} on_leave = {link.callback(move |(op, s)| WeaponInputMsg::InputChanged(op, s))} on_select = {link.callback(move |(idx,s)| WeaponInputMsg::InputChanged(Some(idx),s))} options_classes ={&self.item_rarities}/>
+                    <AutocompleteInput class={format!("weapon-input")} placeholder="Insert a weapon" value={match self.selection{Some(v) => if v.is_null(){String::new()}else{v.name().to_string()}, None => String::new()}} options = {&self.item_names} on_leave = {link.callback(move |(op, s)| WeaponInputMsg::InputChanged(op, s))} on_select = {link.callback(move |(idx,s)| WeaponInputMsg::InputChanged(Some(idx),s))} options_classes ={&self.item_rarities}/>
                     <input class="powder-input" placeholder="Powders (work in progress)" disabled=true/>
                 </div>
             </>

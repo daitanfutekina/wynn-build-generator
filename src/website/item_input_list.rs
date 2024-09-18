@@ -100,8 +100,6 @@ impl Component for ItemInput{
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-
-
         let link = ctx.link();
         let div_content = html!{
             <>
@@ -110,7 +108,7 @@ impl Component for ItemInput{
                 <div class="item-input-list">
                     {self.selection.iter().enumerate().map(|(i,v)|{
                         html!{
-                            <AutocompleteInput class={format!("item-list-input")} stick_to_input=true value={if v.is_null(){String::new()}else{v.name().to_string()}} unfocus_delay=250 options = {&self.item_names} on_leave = {link.callback(move |v| ItemInputMsg::InputChanged(i, v))} on_select = {link.callback(move |(idx,s)| ItemInputMsg::InputChanged(i, (Some(idx),s)))} options_classes ={&self.item_rarities}/>
+                            <AutocompleteInput class={format!("item-list-input")} stick_to_input=true placeholder={format!("Insert {}",ctx.props().item_type)} value={if v.is_null(){String::new()}else{v.name().to_string()}} unfocus_delay=250 options = {&self.item_names} on_leave = {link.callback(move |v| ItemInputMsg::InputChanged(i, v))} on_select = {link.callback(move |(idx,s)| ItemInputMsg::InputChanged(i, (Some(idx),s)))} options_classes ={&self.item_rarities}/>
                         }
                     }).collect::<Html>()}
                 </div>
