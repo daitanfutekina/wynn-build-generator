@@ -3,7 +3,7 @@ Easily compare hundreds of item combinations to find the best builds!
 
 Check out the website [here](https://yellowly.github.io/wynn-build-generator/)
 
-## How to use
+## Usage
 
 Insert all items you want to include in the search, build requirements (ie; a minimum effective health requirement), and what stat to optimize for (ie; melee dps)
 
