@@ -2,7 +2,7 @@ use std::{cmp::Ordering, collections::HashSet, rc::Rc};
 
 use web_sys::{console, Event, HtmlDocument, HtmlInputElement, {wasm_bindgen::JsCast}};
 use yew::{prelude::*, virtual_dom::AttrValue};
-use gloo::{console::log, timers::callback::Timeout, utils::{document, window}};
+use gloo::{timers::callback::Timeout, utils::{document, window}};
 
 mod autocomplete; mod item_input_list; mod weapon_input; mod build_calc; mod build_disp; mod atree_input; mod build_reqs_input; mod build_ordering;
 
@@ -14,7 +14,7 @@ use atree_input::AtreeInput;
 use build_reqs_input::BuildReqsInput;
 use build_ordering::OptimizingStatInput;
 
-use crate::{make_build, wynn_data::{atree::AtreeBuild, builder::WynnBuild, items::{self, Category, Tier, Type, WynnItem}, unhash_to_vec, unhash_val, url_hash_val, Class}, WynnEnum};
+use crate::{item_from_tt, make_build, wynn_data::{atree::AtreeBuild, builder::WynnBuild, items::{self, Category, Tier, Type, WynnItem}, unhash_to_vec, unhash_val, url_hash_val, Class}, WynnEnum};
 use crate::best_build_search::{BestBuildSearch, helper_enums::{CalcStat, SearchParam, SearchReq}};
 #[derive(PartialEq, Clone, Default)]
 pub enum Page{
@@ -32,6 +32,7 @@ pub enum RootMsg{
     SwitchPage(Page),
     BestBuildsUpdate(Vec<WynnBuild>),
     Clear,
+    LoadExample,
     None
 }
 pub struct RootComponent {
@@ -184,6 +185,11 @@ impl Component for RootComponent{
                 self.handle=None;
                 true
             },
+            RootMsg::LoadExample => {
+                self.load_example();
+                ctx.link().send_message(RootMsg::RequestPage(Page::Input));
+                false
+            },
             RootMsg::Clear => {
                 self.items=Default::default();
                 self.weapon=WynnItem::NULL;
@@ -224,7 +230,7 @@ impl Component for RootComponent{
                         <OptimizingStatInput on_leave={link.callback(|stat| RootMsg::OptimizingStatUpdate(stat))} start_value={self.optimizing_stat}/>
                         <div class="gen-button-area">
                         <div class="gen-button-wrapper">
-                            <button onclick={link.callback(|_| RootMsg::RequestPage(Page::Search))}>{if self.prev_search_data.is_some(){"Continue"}else{"Generate!"}}</button>
+                            <button onclick={link.callback(|_| RootMsg::RequestPage(Page::Search))}>{if self.weapon.is_null() || self.items.iter().any(|v| v.is_empty()){"Missing"}else if self.prev_search_data.is_some(){"Continue"}else{"Generate!"}}</button>
                         </div>
                         </div>
                     </div>
@@ -249,6 +255,7 @@ impl Component for RootComponent{
                 <div class={format!("page {}",if self.handle.is_none(){""}else{"transferring-page"})}>
                     <p>{"todo!(\"make the settings page\")"}</p>
                     <button onclick={link.callback(|_| RootMsg::Clear)}>{"Clear Inputs"}</button>
+                    <button onclick={link.callback(|_| RootMsg::LoadExample)}>{"Load Example"}</button>
                 </div>
             }
         };
@@ -267,13 +274,10 @@ impl Component for RootComponent{
 }
 impl RootComponent{
     fn save_cookies(&self){
-        log!("setting cookies");
         let doc = document().unchecked_into::<HtmlDocument>();
-        log!("setting cookies");
         let _ = doc.set_cookie(&format!("InputtedItems={}; expires=Tue, 19 Jan 2038 03:14:07 UTC;",self.hash_inputted_items()));
         let _ = doc.set_cookie(&format!("SearchParams={}; expires=Tue, 19 Jan 2038 03:14:07 UTC;",self.hash_stats()));
         let _ = doc.set_cookie(&format!("Atree={}; expires=Tue, 19 Jan 2038 03:14:07 UTC;",self.atree.get_hash()));
-        log!("setting cookies");
     }
     fn hash_inputted_items(&self) -> String{
         let mut res = String::new();
@@ -304,6 +308,32 @@ impl RootComponent{
             });
         }
         res
+    }
+    fn load_example(&mut self){
+        let saved_items = items_from_hash("0Qm0cD0Au02502701d06W0cB0px0Pf0u00dL07Y01+0u70Rt0EQ0u80cA0p00Je0E-0D40x70r50c80QR0Qx0xP09A0wh0tZ07W0xQ0tv0cF0uP0vI0050Xr0t80K00OKzzz0c70uP0vI0050Xr0t80K20OK0c40Wf0K40x40OJ0FN0n+0ON0c90Ji0OH0uY0og0tt0ue0vM0OM0OO");
+        let mut ring2 = false;
+        for itm in saved_items{
+            if itm.is_null(){ring2 = true; continue}
+            match itm.get_type(){
+                Type::Helmet => self.items[0].push(itm),
+                Type::Chestplate => self.items[1].push(itm),
+                Type::Leggings => self.items[2].push(itm),
+                Type::Boots => self.items[3].push(itm),
+                Type::Ring => {self.items[if ring2{5}else{4}].push(itm)},
+                Type::Bracelet => self.items[6].push(itm),
+                Type::Necklace => self.items[7].push(itm),
+                _ => self.weapon = itm
+            }
+        }
+        let search_param_data = "06>0C16ku000a00000a<";
+        self.optimizing_stat = SearchParam::Calc(CalcStat::SpGenDmg);
+        let max_min_indicies = (search_param_data.find(|c| c=='>').unwrap_or(0),search_param_data.find(|c| c=='<').unwrap_or(0));
+        self.min_reqs = search_reqs_from_hash(search_param_data.get((max_min_indicies.0+1)..max_min_indicies.1).unwrap_or_default());
+        self.max_reqs = search_reqs_from_hash(search_param_data.get((max_min_indicies.1+1)..).unwrap_or_default());
+
+        self.atree = AtreeBuild::from_hash("HJFZ", Class::Assassin).into();
+
+        self.prev_search_data=None;
     }
 }
 
