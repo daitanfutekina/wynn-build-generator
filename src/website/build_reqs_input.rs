@@ -103,6 +103,7 @@ impl Component for BuildReqsInput{
             },
             BuildReqsMsg::RemoveReq(n) => {
                 self.selection.remove(n);
+                ctx.link().send_message(BuildReqsMsg::OnBlur);
             },
             BuildReqsMsg::OnBlur => {
                 // onblur always gets called when nested `<input/>`'s lose focus, even if the focus was redirected to another nested input type. 

@@ -2,7 +2,7 @@ use std::{cmp::Ordering, collections::HashSet, rc::Rc};
 
 use web_sys::{console, Event, HtmlDocument, HtmlInputElement, {wasm_bindgen::JsCast}};
 use yew::{prelude::*, virtual_dom::AttrValue};
-use gloo::{timers::callback::Timeout, utils::{document, window}};
+use gloo::{console::log, timers::callback::Timeout, utils::{document, window}};
 
 mod autocomplete; mod item_input_list; mod weapon_input; mod build_calc; mod build_disp; mod atree_input; mod build_reqs_input; mod build_ordering;
 
@@ -153,6 +153,7 @@ impl Component for RootComponent{
             },
             RootMsg::RequestPage(to) => {
                 let link = ctx.link().clone();
+                // log!("requested page",to.clone() as u32);
                 if self.curr_page==to{
                     return false;
                 }
@@ -162,8 +163,11 @@ impl Component for RootComponent{
                         self.handle = Some(Timeout::new(500, move || link.send_message(RootMsg::SwitchPage(to))));
                     }
                     Page::Search => {
+                        // log!("requested page search");
                         if self.items.iter().all(|v| !v.is_empty()) && !self.weapon.is_null(){
+                            // log!("if passed");
                             window().scroll_to_with_x_and_y(0.0, 0.0);
+                            // log!("scrolled");
                             self.save_cookies();
                             self.handle = Some(Timeout::new(500, move || link.send_message(RootMsg::SwitchPage(to))));    
                         }
@@ -263,10 +267,13 @@ impl Component for RootComponent{
 }
 impl RootComponent{
     fn save_cookies(&self){
+        log!("setting cookies");
         let doc = document().unchecked_into::<HtmlDocument>();
+        log!("setting cookies");
         let _ = doc.set_cookie(&format!("InputtedItems={}; expires=Tue, 19 Jan 2038 03:14:07 UTC;",self.hash_inputted_items()));
         let _ = doc.set_cookie(&format!("SearchParams={}; expires=Tue, 19 Jan 2038 03:14:07 UTC;",self.hash_stats()));
         let _ = doc.set_cookie(&format!("Atree={}; expires=Tue, 19 Jan 2038 03:14:07 UTC;",self.atree.get_hash()));
+        log!("setting cookies");
     }
     fn hash_inputted_items(&self) -> String{
         let mut res = String::new();

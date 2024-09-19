@@ -1,11 +1,9 @@
 use std::rc::Rc;
 
-use web_sys::{console, Event, HtmlInputElement};
 use yew::{prelude::*, virtual_dom::AttrValue};
-use gloo::timers::callback::Timeout;
 
-use crate::wynn_data::{items, items::{WynnItem, Type, Category, Tier, Atrs}, Class, atree::{AtreeBuild}, builder::WynnBuild};
-use crate::best_build_search::helper_enums::{SearchParam,CalcStat};
+use crate::wynn_data::{items::Type, builder::WynnBuild};
+use crate::best_build_search::helper_enums::SearchParam;
 use super::{STAT_RENAMES,STAT_COLOR_CLASSES};
 
 #[derive(Properties, PartialEq)]
@@ -23,7 +21,7 @@ impl Component for BuildDisp{
 
     type Properties = BuildDispProps;
 
-    fn create(ctx: &Context<Self>) -> Self {
+    fn create(_ctx: &Context<Self>) -> Self {
         BuildDisp{}
     }
 

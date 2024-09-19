@@ -1,10 +1,10 @@
 use std::rc::Rc;
 
-use yew::{prelude::*};
+use yew::prelude::*;
 use gloo::timers::callback::Timeout;
 
 use super::AutocompleteInput;
-use crate::{wynn_data::{atree::{archer, assassin, mage, shaman, warrior, AtreeBuild}, items::{self, Category, Tier, Type, WynnItem}, Class}, WynnEnum};
+use crate::{wynn_data::{atree::{archer, assassin, mage, shaman, warrior, AtreeBuild}, items::{self, Category, WynnItem}, Class}, WynnEnum};
 
 
 #[derive(Properties, PartialEq)]
@@ -62,9 +62,9 @@ impl Component for AtreeInput{
                 self.curr_class=ctx.props().class;
                 self.atree_item_names=atree_item_names_from_class(ctx.props().class).into();
                 self.selection=Vec::new();
-                ctx.props().on_leave.emit(Default::default());
+                ctx.props().on_leave.emit(match self.curr_class{Some(c) => self.make_atree(c), None => Default::default()});
             },
-            AtreeInputMsg::AddAtreeItem(option_idx, s) => {
+            AtreeInputMsg::AddAtreeItem(option_idx, _s) => {
                 match option_idx{
                     Some(id) => {
                         match self.selection.binary_search(&id){
@@ -77,6 +77,7 @@ impl Component for AtreeInput{
             },
             AtreeInputMsg::RemoveItem(idx) => {
                 self.selection.remove(idx);
+                ctx.link().send_message(AtreeInputMsg::OnBlur);
             }
             AtreeInputMsg::OnBlur => {
                 // onblur always gets called when nested `<input/>`'s lose focus, even if the focus was redirected to another nested input type. 
@@ -95,13 +96,9 @@ impl Component for AtreeInput{
                 if !self.focused{
                     // emit callback using the selection
                     match ctx.props().class{
-                        Some(c) => ctx.props().on_leave.emit(match c{
-                            Class::Archer => self.selection.iter().map(|id| archer::AtreeItems::VARIENTS[*id]).collect::<AtreeBuild>(),
-                            Class::Warrior => self.selection.iter().map(|id| warrior::AtreeItems::VARIENTS[*id]).collect::<AtreeBuild>(),
-                            Class::Mage => self.selection.iter().map(|id| mage::AtreeItems::VARIENTS[*id]).collect::<AtreeBuild>(),
-                            Class::Assassin => self.selection.iter().map(|id| assassin::AtreeItems::VARIENTS[*id]).collect::<AtreeBuild>(),
-                            Class::Shaman => self.selection.iter().map(|id| shaman::AtreeItems::VARIENTS[*id]).collect::<AtreeBuild>(),
-                        }),
+                        Some(c) => ctx.props().on_leave.emit(
+                            self.make_atree(c)
+                        ),
                         None => return false,
                     }
                     // ctx.props().on_leave.emit(self.selection.clone());
@@ -147,6 +144,17 @@ impl Component for AtreeInput{
             link.send_message(AtreeInputMsg::UpdateClass);
         }
         false
+    }
+}
+impl AtreeInput{
+    fn make_atree(&self, class: Class) -> AtreeBuild{
+        match class{
+            Class::Archer => self.selection.iter().map(|id| archer::AtreeItems::VARIENTS[*id]).collect::<AtreeBuild>(),
+            Class::Warrior => self.selection.iter().map(|id| warrior::AtreeItems::VARIENTS[*id]).collect::<AtreeBuild>(),
+            Class::Mage => self.selection.iter().map(|id| mage::AtreeItems::VARIENTS[*id]).collect::<AtreeBuild>(),
+            Class::Assassin => self.selection.iter().map(|id| assassin::AtreeItems::VARIENTS[*id]).collect::<AtreeBuild>(),
+            Class::Shaman => self.selection.iter().map(|id| shaman::AtreeItems::VARIENTS[*id]).collect::<AtreeBuild>(),
+        }
     }
 }
 

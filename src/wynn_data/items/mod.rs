@@ -152,10 +152,7 @@ impl WynnItem {
         }
     }
     pub fn get_set(&self) -> Sets {
-        if self
-            .item
-            .data_atr((self.item.partitions.0 - 1).min(self.item.data.len() - 1))
-            == 12
+        if !self.is_null() && self.item.data_atr((self.item.partitions.0 - 1).min(self.item.data.len() - 1)) == 12
         {
             Sets::try_from(self.item.data_uval(self.item.partitions.0 - 1)).unwrap_or(Sets::None)
         } else {

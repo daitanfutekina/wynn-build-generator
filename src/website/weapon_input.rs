@@ -46,6 +46,7 @@ impl Component for WeaponInput{
                 self.focused=true;
             },
             WeaponInputMsg::InputChanged(option_idx, _) => {
+                self.focused=true;
                 match option_idx{
                     Some(id) => {
                         if self.items[id].is_null(){

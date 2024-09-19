@@ -2,7 +2,8 @@ pub mod helper_enums;
 
 use std::rc::Rc;
 
-use crate::wynn_data::{builder::WynnBuild, items::*, I12x5, atree::AtreeBuild};
+use crate::wynn_data::{builder::WynnBuild, items::*, I12x5, atree::AtreeBuild, sets::{get_set_bonuses,get_set_skill_bonuses, Sets}};
+use gloo::console::log;
 use helper_enums::SearchReq;
 use crate::make_build;
 
@@ -42,6 +43,7 @@ impl BestBuildSearch{
     
     // In theory, these rules should dramatically reduce the number of item combinations that have to be searched, while
     // similtaneously ensuring that the best combination does not get skipped. 
+    // (Nevermind, if a build includes 2 different sets )
 
     /// Sets up the best build calculator
     /// 
@@ -80,6 +82,10 @@ impl BestBuildSearch{
         // Note that this means counter_mults[0] will always be the maximum number of combinations
         let mut counter_mults: [u64; 9] = [0; 9];
         counter_mults[0]=1;
+
+        // best_set_bonuses[n] represents the best set bonuses for n set items
+        let mut best_set_bonuses: Vec<(I12x5, Vec<(Atrs, i32)>)> = Vec::new();
+        let mut set_counter: Vec<(Sets, usize)> = Vec::new();
         
         // note this is reversed, so going in order necklace > bracelet > ring2 ...
         for (n, i) in items.iter().rev().enumerate(){
@@ -88,6 +94,20 @@ impl BestBuildSearch{
             let mut best = I12x5::ZERO; 
             let mut best_id = [0; Atrs::NUM_STATS];
             for itm in i{
+                // let itm_set = itm.get_set();
+                // if itm_set!=Sets::None{
+                //     let (set_idx, &(_, num_set_items)) = set_counter.iter().enumerate().find(|(_,(s,_))| itm_set==*s).unwrap_or((set_counter.len(),&(itm_set, 0)));
+                //     let set_skill_bonus = get_set_skill_bonuses(itm_set, num_set_items+1);
+                //     let prev_skill_bonus = get_set_skill_bonuses(itm_set, num_set_items);
+                //     let set_skill_diff = (set_skill_bonus-prev_skill_bonus).get_pos();
+                //     let ahh = set_skill_bonus.max(prev_skill_bonus);
+                //     best = (itm.get_skill_bonuses()+set_skill_diff).max(best);
+                //     for id in itm.iter_ids(){ // bubble up highest stat bonuses
+                //         if id.1 > best_id[id.0 as usize - Atrs::NUM_NON_STATS] {best_id[id.0 as usize - Atrs::NUM_NON_STATS] = id.1}
+                //     }
+                //     set_counter[set_idx].1+=1;
+                //     best_set_bonuses
+                // }
                 best = itm.get_skill_bonuses().max(best); // bubble up highest skill bonuses
                 for id in itm.iter_ids(){ // bubble up highest stat bonuses
                     if id.1 > best_id[id.0 as usize - Atrs::NUM_NON_STATS] {best_id[id.0 as usize - Atrs::NUM_NON_STATS] = id.1}
@@ -116,11 +136,10 @@ impl BestBuildSearch{
         items_optimized_order.reverse();
         // console::log_1(&format!("skills[8] {:?} ids[8] {:?}",best_skills[8], best_ids[8]).into());
         let mut temp = Self{items: items_optimized_order, weapon, curr: 1, counter_mults, curr_bests: Vec::new(), best_skills, best_ids, min_stat_reqs: Vec::new(), max_stat_reqs: Vec::new(), atree, calc_ord: build_ord}; // clone?
-        
         // for some reason the first combination needs to be checked here in the constructor (i forget why)
-        match temp.make_build_if_reqs_met(&[temp.weapon,temp.items[0][0],temp.items[1][0],temp.items[2][0],temp.items[3][0],temp.items[4][0],temp.items[5][0],temp.items[6][0],temp.items[7][0]]){
+        match make_build!(&[temp.weapon,temp.items[0][0],temp.items[1][0],temp.items[2][0],temp.items[3][0],temp.items[4][0],temp.items[5][0],temp.items[6][0],temp.items[7][0]], 106, I12x5::ZERO, temp.atree.clone()){
             Some(b) => temp.curr_bests.push((build_ord(&b), b)),
-            None => ()
+            None => (),
         }
         // for i in 0..10{temp.curr_bests.push((22000, WynnBuild::make_from_names(&["Dune Storm", "Dondasch", "Dizzy Spell", "Revenant", "Dispersion", "Dispersion", "Knucklebones", "Diamond Static Necklace", "Oak Wood Spear"], 200).unwrap()))};
         // console::log_1(&format!("start test {}",start).into());
@@ -143,7 +162,7 @@ impl BestBuildSearch{
                     SearchReq::Calc(calc, val) => (calc.ord_fn_f32())(&b) <= *val }) )
                     {Some(b)} 
                 else 
-                    {None},
+                    {log!("build ehp",b.calc_max_ehp()); None},
             None => {None}
         }
     }
@@ -166,7 +185,6 @@ impl BestBuildSearch{
         // console::log_1(&format!("pct {}",self.curr as f32/self.counter_mults[0] as f32).into());
         // println!("pct {}",self.curr as f32/self.counter_mults[0] as f32);
         let mut bld_items = [self.weapon, self.items[0][self.get_curr_item_idx(0)], self.items[1][self.get_curr_item_idx(1)], self.items[2][self.get_curr_item_idx(2)], self.items[3][self.get_curr_item_idx(3)], self.items[4][self.get_curr_item_idx(4)], self.items[5][self.get_curr_item_idx(5)], self.items[6][self.get_curr_item_idx(6)], self.items[7][self.get_curr_item_idx(7)]];
-        
         // I coded this 2 months ago, no clue what's going on here. 
         while self.curr<self.counter_mults[0]{
             let mut start = 0;

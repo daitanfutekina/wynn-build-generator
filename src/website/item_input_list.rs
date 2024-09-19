@@ -89,7 +89,7 @@ impl Component for ItemInput{
                     let mut found: HashSet<u32> = HashSet::new();
                     self.selection.retain(|itm| !itm.is_null() && found.insert(itm.id()));
                     // emit callback using the selection
-                    ctx.props().on_leave.emit((ctx.props().item_type,self.selection.clone()));
+                    ctx.props().on_leave.emit((ctx.props().item_type,self.selection.clone().into_iter().filter(|itm| !itm.is_null()).collect::<Vec<WynnItem>>()));
                     self.selection.resize(ctx.props().min_inputs.max(self.selection.len()+1), WynnItem::NULL);
                 }else{
                     return false

@@ -1,11 +1,11 @@
 use std::rc::Rc;
 
 use wasm_bindgen::JsCast;
-use web_sys::{console, Event, HtmlDocument, HtmlInputElement};
-use yew::{prelude::*, virtual_dom::AttrValue};
+use web_sys::HtmlDocument;
+use yew::prelude::*;
 use gloo::{timers::callback::Timeout, utils::document};
 
-use crate::wynn_data::{atree::AtreeBuild, builder::WynnBuild, items::{self, Category, Tier, Type, WynnItem, Atrs}, Class};
+use crate::wynn_data::{atree::AtreeBuild, builder::WynnBuild, items::{WynnItem, Atrs}};
 use crate::best_build_search::{BestBuildSearch,helper_enums::{SearchReq,SearchParam,CalcStat}};
 
 use super::build_disp::BuildDisp;
@@ -24,7 +24,6 @@ pub struct BuildCalcProps{
     pub start_value: (u64,Vec<WynnBuild>)
 }
 pub enum CalcMsg{
-    ReqStart,
     StartCalc,
     ContinueCalc,
     CalcDone,
@@ -55,10 +54,6 @@ impl Component for BuildCalcComponent{
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            CalcMsg::ReqStart => {
-
-                true
-            },
             CalcMsg::StartCalc => {
                 self.calc = BestBuildSearch::make(ctx.props().weapon, ctx.props().items.clone(), ctx.props().atree.clone(), 
                 match ctx.props().optimizing_stat{
@@ -69,7 +64,9 @@ impl Component for BuildCalcComponent{
                 self.calc.set_max_stat_requirements(ctx.props().max_reqs.clone());
 
                 self.calc.skip_combinations(self.progress.0);
-                self.calc.set_best_builds(self.res_builds.clone());
+                if self.progress.0!=0{
+                    self.calc.set_best_builds(self.res_builds.clone());
+                }
                 
                 let link = ctx.link().clone();
                 self.handle = Some(Timeout::new(0, move || link.send_message(CalcMsg::ContinueCalc)));
@@ -103,7 +100,7 @@ impl Component for BuildCalcComponent{
         }
     }
 
-    fn view(&self, ctx: &Context<Self>) -> Html {
+    fn view(&self, _ctx: &Context<Self>) -> Html {
         html!{
             <div class="build-calc">
                 <div class="calc-loading">
@@ -125,7 +122,7 @@ impl Component for BuildCalcComponent{
 impl BuildCalcComponent{
     fn save_progress(&mut self){
         let doc = document().unchecked_into::<HtmlDocument>();
-        self.res_builds = self.calc.peek_curr_bests().map(|(ord,bld)| bld.clone()).collect::<Vec<WynnBuild>>();
+        self.res_builds = self.calc.peek_curr_bests().map(|(_ord,bld)| bld.clone()).collect::<Vec<WynnBuild>>();
         let _ = doc.set_cookie(&format!("CalcProgress={},{}; expires=Tue, 19 Jan 2038 03:14:07 UTC;",self.progress.0,self.res_builds.iter().map(|b| b.generate_hash()).collect::<Vec<String>>().join(",")));
     }
 }

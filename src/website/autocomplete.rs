@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use web_sys::{DomRect, Element, HtmlInputElement};
+use web_sys::{DomRect, Element, HtmlElement, HtmlInputElement};
 use yew::{prelude::*, virtual_dom::AttrValue};
 use gloo::timers::callback::Timeout;
 
@@ -71,6 +71,7 @@ pub enum AutocompleteInputMsg{
     OnFocus(Option<DomRect>),
     OnInput(String, Option<DomRect>),
     OnSelect(usize),
+    ButtonClick(HtmlElement),
     OnLeave,
     Unfocus,
     None
@@ -231,8 +232,11 @@ impl Component for AutocompleteInput{
                 self.selected=Some(option_id);
                 ctx.props().on_select.emit((option_id,self.content.clone()));
             },
+            AutocompleteInputMsg::ButtonClick(e) => {
+                self.unfocus_callback_handle = Some(Timeout::new(0, move || {let _ = e.blur(); ()}));   
+            },  
             AutocompleteInputMsg::OnLeave => {
-                // when the autocomplete input field is exited, set a timeout for removing the options div, and call the on_leave callback
+                // when the autocomplete input field is exited, set a timeout for removing the options div, and call the unfocus callback
                 if self.is_focused && ctx.props().unfocus_delay!=u32::MAX{
                     let link = ctx.link().clone();
                     self.unfocus_callback_handle = Some(Timeout::new(ctx.props().unfocus_delay, move || link.send_message(AutocompleteInputMsg::Unfocus)));    
@@ -280,7 +284,7 @@ impl Component for AutocompleteInput{
                             {self.display_options.iter().enumerate().map(|(_,(i,v))|
                                 {let temp = i.clone();
                                 html!{
-                                    <button class={ctx.props().options_classes.get(*i).unwrap_or(&String::new())} onfocus={link.callback(move |_| AutocompleteInputMsg::OnSelect(temp.clone()))} onclick={link.callback(move |_| AutocompleteInputMsg::OnLeave)}>{v.clone()}</button>
+                                    <button class={ctx.props().options_classes.get(*i).unwrap_or(&String::new())} onfocus={link.callback(move |_| AutocompleteInputMsg::OnSelect(temp.clone()))} onclick={link.callback(|e: MouseEvent| AutocompleteInputMsg::ButtonClick(e.target_unchecked_into()))}>{v.clone()}</button>
                                 }
                             }
                             ).collect::<Html>()}
