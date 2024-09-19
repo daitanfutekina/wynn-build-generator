@@ -3,7 +3,6 @@ pub mod helper_enums;
 use std::rc::Rc;
 
 use crate::wynn_data::{builder::WynnBuild, items::*, I12x5, atree::AtreeBuild, sets::{get_set_bonuses,get_set_skill_bonuses, Sets}};
-use gloo::console::log;
 use helper_enums::SearchReq;
 use crate::make_build;
 
@@ -84,8 +83,8 @@ impl BestBuildSearch{
         counter_mults[0]=1;
 
         // best_set_bonuses[n] represents the best set bonuses for n set items
-        let mut best_set_bonuses: Vec<(I12x5, Vec<(Atrs, i32)>)> = Vec::new();
-        let mut set_counter: Vec<(Sets, usize)> = Vec::new();
+        // let mut best_set_bonuses: Vec<(I12x5, Vec<(Atrs, i32)>)> = Vec::new();
+        // let mut set_counter: Vec<(Sets, usize)> = Vec::new();
         
         // note this is reversed, so going in order necklace > bracelet > ring2 ...
         for (n, i) in items.iter().rev().enumerate(){
@@ -162,7 +161,7 @@ impl BestBuildSearch{
                     SearchReq::Calc(calc, val) => (calc.ord_fn_f32())(&b) <= *val }) )
                     {Some(b)} 
                 else 
-                    {log!("build ehp",b.calc_max_ehp()); None},
+                    {None},
             None => {None}
         }
     }
