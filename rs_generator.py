@@ -600,7 +600,7 @@ def reparse_updated_item_database(correctdata, wynnbuilderdata):
                   'mainAttackDamage' : 'mdPct', 'manaRegen' : 'mr', 'manaSteal' : 'ms', 'poison' : 'poison', 'reflection' : 'ref', 'rawSpellDamage' : 'sdRaw', 'spellDamage' : 'sdPct', 'slowEnemy' : 'slowEnemy', 
                   '1stSpellCost' : 'spPct1','2ndSpellCost' : 'spPct2','3rdSpellCost' : 'spPct3','4thSpellCost' : 'spPct4','raw1stSpellCost' : 'spRaw1','raw2ndSpellCost' : 'spRaw2','raw3rdSpellCost' : 'spRaw3','raw4thSpellCost' : 'spRaw4',
                   'walkSpeed' : 'spd', 'sprint' : 'sprint', 'sprintRegen' : 'sprintReg', 'thorns' : 'thorns', 'weakenEnemy' : 'weakenEnemy', 'xpBonus' : 'xpb', 'neutralDamage' : 'nDamPct', 
-                  'earthDamage': 'eDamPct', 'damage' : ['mdPct', 'sdPct'], 'baseDamage' : 'nDam'}
+                  'earthDamage': 'eDamPct', 'damage' : ['mdPct', 'sdPct'], 'baseDamage' : 'nDam', 'mainAttackRange' : 'mainAtkRange', 'rawMaxMana' : 'maxMana', 'criticalDamageBonus' : 'critDamPct'} # mainatkrange rawmaxmana maxmana added. what are these?
     ele_id_renames = {'base*Defence':'*Def', 'base*Damage' : '*Dam','*Damage' : '*DamPct', 'raw*Damage' : '*DamRaw', '*Defence' : '*DefPct', 'raw*SpellDamage' : '*SdRaw', '*SpellDamage' : '*SdPct', 'raw*MainAttackDamage' : '*MdRaw', '*MainAttackDamage' : '*MdPct'}
     elements = {'neutral':'n', 'earth':'e', 'thunder':'t', 'water':'w', 'fire':'f', 'air':'a', 'elemental' : 'r'}
     for key, value in ele_id_renames.items():
