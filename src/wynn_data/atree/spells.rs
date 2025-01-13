@@ -51,16 +51,18 @@ impl Spell{
                 EffectKey::Cost => res.cost=v,
                 EffectKey::BaseSpell => (),
                 EffectKey::TargetPart => todo!(), //error
+                EffectKey::Toggle => todo!(), //error
                 EffectKey::Slider => todo!(), //error
                 EffectKey::SliderName => todo!(), //error
                 EffectKey::SliderMax => todo!(), //error
                 EffectKey::Max => (), // ?
-                EffectKey::SliderStep => todo!(), //error
                 EffectKey::UseAtkspd => (), // idk how important this is yet, is important tho
                 EffectKey::Behavior => todo!(), // error
-                EffectKey::Toggle => todo!(), //error
+                EffectKey::SliderStep => todo!(), //error
+                EffectKey::Hide => todo!(),
                 EffectKey::Round => todo!(), //is this important? error
                 EffectKey::Power => (), // ?
+                EffectKey::SliderDefault => todo!(),
                 EffectKey::Parts => {
                     let mut add_part: SpellPart = SpellPart{id:0,mults:[0;6],hits:1,final_mult:100,power:0};
                     for (pk,pv,pidx) in effect.iter_parts_from_idx(effect_idx, v as usize){

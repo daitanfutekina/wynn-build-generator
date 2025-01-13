@@ -200,7 +200,7 @@ def setup_item_enums(data):
     generate_enum(data,'items.majorIds','majorIds')
 
     # all of the following is for generating the Atrs enum
-    atrs_ignore = ["drop", "dropInfo", "armorColor", "skin", "material", "armorType","lore", "quest", "set", "displayName","name"]
+    atrs_ignore = ["drop", "dropInfo", "armourColor", "skin", "armourMaterial", "armorType","lore", "quest", "set", "displayName","name","icon","spRegen","averageDps"] # todo: fix main attack range
     item_props = ['type','tier','lvl','category','id','fixID','atkSpd','slots','restrict','majorIds','allowCraftsman','classReq','set']
     # bad at naming things, these are elemental item stats that aren't identified (?). 
     # except reqs are properties, not stats (by my made up naming convention). idk.
@@ -255,6 +255,7 @@ def parse_data(value, *, key = None, ret_len_if_list = False, ignore_enums = [])
     elif type(value)==tuple and len(value)==2 and type(value[0])==int and type(value[1])==int:
         return ((value[0]&0xFFF)<<12) | (value[1]&0xFFF)
     elif type(value)==str:
+        if value.isnumeric(): return int(value)
         if value.split("-",1)[0].isnumeric():
             temp = value.split("-",1)
             return ((int(temp[0])&0xFFF)<<12) | (int(temp[1])&0xFFF)
@@ -431,6 +432,7 @@ def setup_atree(data,for_wynn_class=None):
         print("EffectTypes:",enums['EffectType'])
 
         generate_enum(data,"*.effects.bonuses.type","BonusType")
+        enums['BonusType']=["Stat","Prop"]
         print("BonusTypes:",enums['BonusType'])
 
         generate_enum(data,"*.effects.parts.","EffectPartKey",['display'])
@@ -579,7 +581,7 @@ def reparse_atree_data(data):
                             i+=1
     # print(atree_items["Archer"])
 
-# wynnbuilder refuses to update items so i need to partially switch to https://api.wynncraft.com/v3/item/database?fullResult for item data
+# check https://api.wynncraft.com/v3/item/database?fullResult for updates to item data
 def reparse_updated_item_database(correctdata, wynnbuilderdata):
     res = dict(correctdata)
     for key,value in correctdata.items():
@@ -708,17 +710,24 @@ if __name__=='__main__':
         print(f"\n\033[1;31mError loading file: \033[93m{str(type(e))}:\033[0;0m {str(e)}\n")
     f.close()
     
-    f = urllib.request.urlopen("https://raw.githubusercontent.com/hppeng-wynn/hppeng-wynn.github.io/dev/data/2.0.4.3/items.json")
+    f = urllib.request.urlopen("https://raw.githubusercontent.com/hppeng-wynn/hppeng-wynn.github.io/refs/heads/dev/data/2.1.1.3/items.json")
     try:
         data = json.load(f)
+        for item in data['items']:
+            item.pop('mainAttackRange', None)
     except Exception as e:
         print(f"\n\033[1;31mError loading file: \033[93m{str(type(e))}:\033[0;0m {str(e)}\n")
     f.close()
     
     data['items'] = reparse_updated_item_database(data1, data)
 
-    print("['"+"','".join("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+-")+"']")
-    print(len("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+-"))
+    # temporary fix for soul point regen being removed
+    for st in data['sets']:
+        for d in data['sets'][st]['bonuses']:
+            d.pop('spRegen',None)
+            if 'hpbonus' in d:
+                d['hpBonus'] = d['hpbonus']
+                d.pop('hpbonus', None)
 
     # construct_items_rust(data, False)
     
@@ -730,7 +739,7 @@ if __name__=='__main__':
     setup_item_data(data)
     setup_set_data(data)
     
-    f = urllib.request.urlopen("https://raw.githubusercontent.com/wynnbuilder/wynnbuilder.github.io/master/data/2.0.4.3/atree.json")
+    f = urllib.request.urlopen("https://raw.githubusercontent.com/hppeng-wynn/hppeng-wynn.github.io/refs/heads/dev/data/2.1.1.3/atree.json")
     try:
         data = json.load(f)
     except Exception as e:
@@ -796,360 +805,3 @@ if __name__=='__main__':
 # https://forums.wynncraft.com/threads/2-0-spellbound-changelog.299715/
 
 #Agility will not fully nullify damage when triggered anymore. Instead, it will deal 10% of the damage to you and deal no knockback. Its scaling is slightly higher than defence, but they are both effectively equal.
-
-
-@DeprecationWarning
-def construct_items_rust(data, update=False):
-    # stats to ignore during search. some of these stats are re-added later to maintain some ordering scheme or for type modifications
-    ignore =["drop", "dropInfo", "armorColor", "skin", "material", "armorType","lore", "quest", "set", "displayName","name"]
-    # used when coverting to snake case - the keyword 'type' and 'ref' don't work in rust, so change these
-    special_renames = {"fixID" : "fix_id", "eSteal" : "em_steal", "ref" : "reflect", "type" : "item_type"}
-    # addable ids (ie, spell percent gets added, but level req, or skill reqs dont get added)
-    addable_ids = ["str","dex","int","def","agi", "hp","jh","weakenEnemy","kb","mr","expd","hpBonus","spd","ms","ref","atkTier","eSteal","poison","thorns","sprintReg","ls","xpb","lb","sprint","slowEnemy"]
-    # dict of keyname : (capitalized camel case format, snake case format, data type)
-    stats = {}
-    # item properties list, with a few properties already set in a specific order. other item properties just get added on to this list. 
-    item_props = ["name","type","tier","lvl","category","id","fixID","atkSpd"]
-    # all item ids, with a few ids already set in a specific order. other item ids get added on to this list. -- NAMING CONVENTION DIFFERENT IN RUST, THESE ARE ALL STATS NOT IDS
-    ids = ['hp','eDef','tDef','wDef','fDef','aDef']
-    # i'm too lazy to change the naming convention for this file, so this is used to find the true number of stats and ids (for rust naming convention)
-    num_stats_not_ids = len(ids)
-    # this is used to split up ids into elemental and non-elemental ids
-    ele_ids = []
-    non_ele_ids = []
-    skill_bonuses = ["str","dex","int","def","agi"]
-    # idk what this does tbh
-    ele_stats = []
-    # i've arbitrarily determined that the best way to set up WynnItems (struct) is to store all data in a single array, 
-    # then define partition indicies to separate properties, ability point stuff, damages, then ids in this array. 
-    save_separately = ["strReq","dexReq","intReq","defReq","agiReq","str","dex","int","def","agi","nDam","eDam","tDam","wDam","fDam","aDam"]
-    # generates enums for the listed keys
-    enum_builder = {"majorIds": ([],[]), "type": ([],[]), "restrict": ([],[]), "category": ([],[]), "tier": ([],[]), "atkSpd": ([],[]), "classReq": ([],[]), "sets": ([],[])}
-    enum_names = [s[0].upper()+s[1::] for s in enum_builder.keys()]
-    for d in data['items']:
-        for k in d.keys():
-            if not k in stats and not k in ignore:
-                t = "i32"
-                addable = False
-                if not type(d[k])==int:
-                    if type(d[k])==str:
-                        if d[k].split("-",1)[0].isnumeric():
-                            t="u16,u16"
-                            addable=True
-                        elif k in enum_builder:
-                            t=capitalize(k)
-                        else:
-                            t="String"
-                    elif type(d[k])==list:
-                        t="MajorIds" # please no items with multiple major ids or else everything breaks
-                    else:
-                        t=type(d[k]).__name__ # only time this gets called is for bools
-                else:
-                    if k in addable_ids or k.lower().endswith("raw") or k.lower().endswith("pct") or k.lower().endswith("regen") or k.lower().endswith("def") or k[-1].isnumeric():
-                        addable=True
-                # order.insert(0 if addable else -1,k)
-                snake = special_renames[k] if k in special_renames.keys() else camel_to_snake(k)
-                if addable:
-                    if k in save_separately or k in ids:
-                        # do nothing? 
-                        useless = 0
-                    elif snake[1]=='_' and snake[0] in dmg_types:
-                        s = "ele_"+snake[2::]+"s"
-                        if not s in ele_stats: 
-                            ele_stats.append(s)
-                            ele_ids.extend([dmg_type+k[1::] for dmg_type in (dmg_types[1::] if "def" in s else dmg_types)])
-                    else:
-                        non_ele_ids.append(k)
-                else:
-                    if not k in item_props and not k in save_separately:
-                        item_props.append(k)
-                stats[k]=(capitalize(k),snake, t)
-            for k, v in enum_builder.items():
-                if k in d:
-                    if type(d[k])==list:
-                        for val in d[k]:
-                            if len(val)>0 and not val.lower() in [lst_val.lower() for lst_val in v[0]]:
-                                v[0].append(capitalize(val))
-                                v[1].append(upper_snake_to_camel(val))
-                    else:
-                        if len(d[k])>0 and not d[k].lower() in [lst_val.lower() for lst_val in v[0]]:
-                            v[0].append(capitalize(d[k]))
-                            v[1].append(upper_snake_to_camel(d[k]))
-                            
-    for t in dmg_types[0:6]: ele_ids.append(f"{t}DamAddMin")
-    for t in dmg_types[0:6]: ele_ids.append(f"{t}DamAddMax")
-
-    for e in ele_ids:
-        if not e in stats:
-            stats[e]=(capitalize(e),camel_to_snake(e), "i32")
-    item_props.pop(0)
-    item_props.append("set")
-    ids.extend(non_ele_ids+ele_ids)
-    order = item_props +save_separately+ ids
-
-    global atrs
-    atrs = order
-
-    # overriding the order for specific enums (these make more logical sense)
-    enum_builder["tier"]=["Common","Unique","Rare","Legendary","Set","Fabled","Mythic"]
-    enum_builder["atkSpd"]=(["SUPER_SLOW","VERY_SLOW","SLOW","NORMAL","FAST","VERY_FAST","SUPER_FAST"],["SuperSlow","VerySlow","Slow","Normal","Fast","VeryFast","SuperFast"])
-    enum_builder["type"]=["Helmet","Chestplate","Leggings","Boots","Ring","Bracelet","Necklace","Bow","Spear","Wand","Dagger","Relik"]
-    # need an enum for all the ids as well
-    stats['set']=("Set","set","Sets")
-    enum_builder["Skill"] = [capitalize(sk) for sk in skill_bonuses]
-    enum_builder["DamType"] = ["Neutral","Earth","Thunder","Water","Fire","Air","Rainbow"]
-    enum_builder["Atrs"] = ([k for k in order],[f"{stats[k][0]}" for k in order])
-
-    set_bonuses = ["&[]"]
-    # get set from item name
-    get_set = {}
-    enum_builder['sets'][0].append("None")
-    enum_builder['sets'][1].append("None")
-
-    for k, v in enum_builder.items():
-        enum_name = capitalize(k)
-        if type(v[0])==list: 
-            enums[enum_name]=v[0]
-        else:
-            enums[enum_name]=v
-
-    # set this to large number to parse all sets. 
-    limit = 10000
-    for st in data['sets']:
-        enum_builder['sets'][0].append(capitalize(st))
-        enum_builder['sets'][1].append(upper_snake_to_camel(st))
-        bonuses = []
-        for itm in data['sets'][st]['items']:
-            get_set[itm]=upper_snake_to_camel(st)
-        for b in data['sets'][st]['bonuses']:
-            b_ids = {}
-            for key, value in b.items():
-                real_key = 'fixID' if key=='illegal' else 'spd' if key=='ws' else key
-                stat = stats[real_key]
-                # print(value)
-                # print(order.index(real_key)<<24 + (value & 0xFFFFFF))
-                b_ids[real_key] = (order.index(real_key)<<24) + ((value if stat[2]=="i32" or stat[2]=="u32" else 1 if stat[2]=="bool" else 0)&0xFFFFFF)
-            bonuses.append("("+str(compress_skills(get_skills(b)))+", &["+','.join([str(b_ids[i]) for i in order if i in b_ids])+"])")
-        set_bonuses.append("&["+','.join(bonuses)+"]")
-        limit-=1
-        if limit<=0: break
-
-    # generates the enum declarations (also a tostring method for each enum)
-    enums_string = []
-    for k, v in enum_builder.items():
-        enum_name = capitalize(k)
-        if not type(v[0])==list: 
-            enum_builder[k]=(v,v)
-            v=enum_builder[k]
-        adder = f"#[derive(Clone{',Default' if len(v)<=2 else ''},PartialEq,PartialOrd,Eq,Ord,Copy,Debug)]\npub enum "+ enum_name+f"{'{#[default]' if len(v)<=2 else '{'}"
-        if len(v)>2: adder += ",".join([v[1][i]+'('+v[2][i]+')' for i in range(len(v[1]))])+"}\n"
-        else: adder += ",".join(v[1])+"}\n"
-        # adder += "impl "+enum_name+"{pub fn from_usize(n: usize) -> Result<Self,String> {match n{"
-        # if len(v)>2:
-        #     for i in range(len(v[0])):
-        #         t = v[2][i].split(',')[0]
-        #         adder+=f"""{i} => Result::Ok({enum_name}::{v[1][i]}({t+'::default(),'+t+'::default()' if ',' in v[2][i] else t+'::default()' if not 'Vec' in v[2][i] else 'Vec::default()'})), """
-        # else:
-        #     for i in range(len(v[0])):
-        #         adder+=f"""{i} => Result::Ok({enum_name}::{v[1][i]}), """
-        # adder+="""_ => Result::Err(String::from("Invalid number"))}}\npub fn from_u32(n: u32) -> Result<Self,String>{match n{"""
-        # if len(v)>2:
-        #     for i in range(len(v[0])):
-        #         t = v[2][i].split(',')[0]
-        #         adder+=f"""{i} => Result::Ok({enum_name}::{v[1][i]}({t+'::default(),'+t+'::default()' if ',' in v[2][i] else t+'::default()' if not 'Vec' in v[2][i] else 'Vec::default()'})), """
-        # else:
-        #     for i in range(len(v[0])):
-        #         adder+=f"""{i} => Result::Ok({enum_name}::{v[1][i]}), """
-        # adder+="""_ => Result::Err(String::from("Invalid number"))}}\npub fn to_num(&self) -> usize{match self{"""
-        # if len(v)>2:
-        #     for i in range(len(v[0])):
-        #         adder+=f"""{enum_name}::{v[1][i]}({'_,_' if ',' in v[2][i] else '_'}) => {i}, """
-        # else:
-        #     for i in range(len(v[0])):
-        #         adder+=f"""{enum_name}::{v[1][i]} => {i}, """
-        # adder+="}}"
-        adder += "impl "+enum_name+"{pub const NUM_VARIENTS:usize="+str(len(v[0]))+";pub fn iter() -> std::array::IntoIter<Self,"+str(len(v[0]))+">{["
-        if len(v)>2:
-            for i in range(len(v[0])):
-                adder+=f"""{enum_name}::{v[1][i]}({'Default::default(),Default::default()' if ',' in v[2][i] else 'Default::default()'}),"""
-        else:
-            for i in range(len(v[0])):
-                adder+=f"""{enum_name}::{v[1][i]},"""
-        adder+="].into_iter()}"
-        if len(v)>2:
-            adder+="\npub fn varient_eq(&self, other: &Self) -> bool {discriminant(self) == discriminant(other)}"
-        adder+="""}\n"""
-
-        adder += "impl std::convert::TryFrom<u8> for "+enum_name+"{type Error=TryIntoWynnEnumError<u8,Self>;fn try_from(n: u8) -> Result<Self,Self::Error> {match n{"
-        if len(v)>2:
-            for i in range(len(v[0])):
-                t = v[2][i].split(',')[0]
-                adder+=f"""{i} => Ok({enum_name}::{v[1][i]}({t+'::default(),'+t+'::default()' if ',' in v[2][i] else t+'::default()' if not 'Vec' in v[2][i] else 'Vec::default()'})), """
-        else:
-            for i in range(len(v[0])):
-                adder+=f"""{i} => Ok({enum_name}::{v[1][i]}), """
-        adder+="""_ => Err(TryIntoWynnEnumError{from: n, to: Self::default()})}}}\n"""
-
-        adder += "impl fmt::Display for "+enum_name+"""{fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {write!(f,"{}",match self{"""
-        if len(v)>2:
-            for i in range(len(v[0])):
-                adder+=f"""{enum_name}::{v[1][i]}({'v1,v2' if ',' in v[2][i] else 'v'}) => format!("{v[0][i]}: {'{}, {}",v1,v2' if ',' in v[2][i] else '{}",v'}), """
-        else:
-            for i in range(len(v[0])):
-                adder+=f"""{enum_name}::{v[1][i]} => "{v[0][i]}", """ #String::from(
-        adder+="})}}"
-        adder+="\nimpl WynnEnum for "+enum_name+"{}"
-        adder+="enum_from_into!("+enum_name+", u8, u32,u64,i32,i64,usize);"
-        enums_string.append(adder)
-    enums_string.append("impl super::TryIntoI12x5Idx for Skill{type Error = String;fn try_into(self) -> Result<super::I12x5Idx, Self::Error> {Ok(match self{Self::Str => super::I12x5Idx::_0,Self::Dex => super::I12x5Idx::_1,Self::Int => super::I12x5Idx::_2,Self::Def => super::I12x5Idx::_3,Self::Agi => super::I12x5Idx::_4})}}")
-    # consts = f"mod items_list; use core::fmt; use std::mem::discriminant; use std::vec::IntoIter; pub const NUM_ITEM_ATRS: usize = {len(order)}; pub const NUM_ITEM_PROPS: usize = {len(item_props)}; pub const NUM_ITEM_IDS: usize = {len(ids)}; pub const NUM_ELE_IDS: usize = {len(ele_ids)}; pub const NUM_NON_IDS: usize = {len(order)-len(ids)};const DIGITS: [char; 64] = ['0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','+','-'];"
-    # consts+="\nconst fn parse_data_atr(n: u32)->u32{n>>24}const fn parse_data_u32(n: u32)->u32{n&0xFFFFFF}const fn parse_data_i32(n: u32)->i32{(n as i32)<<8>>8}" #parse_data_i32(n: u32)->i32{((n&0x800000)*0x1FF|n&0xFFFFFF) as i32}
-
-    consts=f"/// Total number of item attributes. Attributes include all stats and most of the other item properties (rarity, category, etc)\n///\n/// See enums::Atrs for more info\npub const NUM_ITEM_ATRS: usize = {len(order)};\n"
-    consts+=f"/// Total number of item properties. Properties include most non-addable attributes of an item (rarity, category, etc)\n///\n/// See enums::Atrs for more info\npub const NUM_ITEM_PROPS: usize = {len(item_props)};\n"
-    consts+=f"/// Total number of item stats. Includes all standard identifications, in addition to things such as elemental defs\n///\n/// See enums::Atrs for more info\npub const NUM_ITEM_STATS: usize = {len(ids)};\n"
-    consts+=f"/// Total number of elemental stats.\n///\n/// See enums::Atrs for more info\npub const NUM_ELE_STATS: usize = {len(ele_ids)};\n"
-    consts+=f"/// Simply `NUM_ITEM_ATRS - NUM_ITEM_STATS`\n///\n/// See `NUM_ITEM_ATRS`, 'NUM_ITEM_STATS`, and `enums::Atrs`` for more info\npub const NUM_NON_STATS: usize = {len(order)-len(ids)};\n"
-    consts+=f"/// Total number of identifications.\n///\n/// See enums::Atrs for more info\npub const NUM_ITEM_IDS: usize = {len(ids)-num_stats_not_ids};\n"
-    consts+=f"/// `NUM_ITEM_ATRS - NUM_ITEM_IDS`\n///\n/// See enums::Atrs for more info\npub const NUM_NON_IDS: usize = {len(order)-len(ids)+num_stats_not_ids};\n"
-
-    wynn_item_struct = "struct WynnItemData<'a>{name: &'a str, sps_req_data: i64, sps_bonus_data: i64, partitions: (usize,usize,usize,usize), data: &'a [u32]}impl <'a>WynnItemData<'a>{fn data_atr(&self, idx: usize) -> u32{parse_data_atr(self.data[idx])} fn data_ival(&self, idx: usize) -> i32{parse_data_i32(self.data[idx])} fn data_uval(&self, idx: usize) -> u32{parse_data_u32(self.data[idx])}}"
-
-    # wynn_item = "#[derive(Clone)]\npub struct WynnItem{item: &'static WynnItemData<'static>, pub dams: [(u16,u16); 6], pub skill_reqs: [i32;5], pub skill_boosts: [i32; 5]} impl WynnItem{pub fn null() -> WynnItem{WynnItem{item: items_list::ALL_ITEMS[0],dams:[(0_u16,0_u16);6],skill_reqs: [0;5],skill_boosts: [0;5]}} pub fn from(id: usize) -> WynnItem{let item = items_list::ALL_ITEMS[id];let mut dams:[(u16,u16);6]=[(0,0),(0,0),(0,0),(0,0),(0,0),(0,0)];let mut skill_reqs = [0,0,0,0,0]; let mut skill_boosts = [0,0,0,0,0]; for i in item.partitions.0..item.partitions.3{let atr = item.data_atr(i); match atr{"
-    wynn_item = "#[derive(Clone)]\npub struct WynnItem{item: &'static WynnItemData<'static>, quality: f32} impl WynnItem{pub fn null() -> WynnItem{WynnItem{item: items_list::ALL_ITEMS[0], quality: 1.0}} pub fn from(idx: usize) -> WynnItem{let item = items_list::ALL_ITEMS[idx]; WynnItem{item: &items_list::ALL_ITEMS[idx],quality:1.0}}"
-    # partition_start = order.index("strReq")
-    # wynn_item+='|'.join([str(n) for n in range(partition_start,partition_start+5)])+f" => skill_reqs[(atr-{partition_start}) as usize]=item.data_ival(i),"
-    # wynn_item+='|'.join([str(n) for n in range(partition_start+5,partition_start+10)])+f" => skill_boosts[(atr-{partition_start}-5) as usize]=item.data_ival(i),"
-    # wynn_item+='|'.join([str(n) for n in range(partition_start+10,partition_start+16)])+f" => dams[(atr-{partition_start}-10) as usize]=((item.data_uval(i)&0xFFF) as u16,(item.data_uval(i)>>12) as u16),"
-    # for atr in save_separately:
-    #     idx = order.index(atr)
-    #     if idx<partition_start+5:
-    #         wynn_item+=f"{idx} => skill_reqs[{idx-partition_start}]=item.data_ival({idx}),"
-    #     elif idx<partition_start+10:
-    #         wynn_item+=f"{idx} => skill_boosts[{(idx-partition_start)%5}]=item.data_ival({idx}),"
-    #     else:
-    #         wynn_item+=f"{idx} => dams[{idx-partition_start-10}]=((item.data_uval({idx})&0xFFF) as u16,(item.data_uval({idx})>>12) as u16),"
-    # wynn_item+="_ => break}}Self{item: &item, dams, skill_reqs, skill_boosts}}"
-
-    wynn_item+="pub fn get_type(&self) -> Type{Type::from_u32(if self.is_null(){7}else{self.item.data_uval(0)}).unwrap_or(Type::Helmet)}"
-    wynn_item+="pub fn get_category(&self) -> Category{Category::from_u32(if self.is_null(){0}else{self.item.data_uval("+str(order.index("category"))+")}).unwrap_or(Category::Armor)}"
-    wynn_item+='pub fn is_null(&self) -> bool{self.item.data.is_empty()}'
-    # wynn_item+="fn get_atr(&self, atr: Atrs)->Option<u32>{let atr_u32 = atr as u32; let idx = match self.item.data.binary_search(&((atr_u32)<<24)){Ok(v) => v, Err(v) => v}; if self.item.data[idx]>>24==atr_u32{Some(self.item.data[idx] & 0xFFFFFF)}else{None}}"
-    wynn_item+='pub fn fixed_id(&self) -> bool{self.item.data.len()>='+str(order.index("fixID")+1)+'&&self.item.data_atr('+str(order.index("fixID"))+')=='+str(order.index("fixID"))+'}'
-    wynn_item+="pub fn name(&self) -> &str{self.item.name}"
-    wynn_item+="pub fn atk_spd(&self)->AtkSpd{if self.item.data_atr("+str(order.index("atkSpd")-1)+".min(self.item.data.len()-1))=="+str(order.index("atkSpd"))+"{AtkSpd::from_u32(self.item.data_uval("+str(order.index("atkSpd")-1)+")).unwrap_or(AtkSpd::Normal)}else if self.item.data_atr("+str(order.index("atkSpd"))+".min(self.item.data.len()-1))=="+str(order.index("atkSpd"))+"{AtkSpd::from_u32(self.item.data_uval("+str(order.index("atkSpd"))+")).unwrap_or(AtkSpd::Normal)}else{AtkSpd::Normal}}"
-    wynn_item+="pub fn get_tier(&self)->Tier{Tier::from_u32(if self.is_null(){0}else{self.item.data_uval("+str(order.index("tier"))+")}).unwrap_or(Tier::Common)}"
-    wynn_item+="fn calc_id(&self, idx: usize)->i32{let base_value = self.item.data_ival(idx); if self.fixed_id()||self.item.data_atr(idx)<="+str(order.index('aDef'))+"{base_value}else if base_value>0 {(base_value as f32*(self.quality+0.3)).round() as i32}else{(base_value as f32*((1.0-self.quality)*0.6+0.7)+4.000001*f32::EPSILON).round() as i32}}"
-    wynn_item+="pub fn get_hash(&self) -> String{url_hash_val(self.item.data_ival("+str(order.index('id'))+"),3)}"
-    wynn_item+="fn get_data_i32(&self, idx: usize) -> Option<(Atrs,i32)>{if idx>=self.item.data.len(){None}else{Some((Atrs::from_u32(self.item.data_atr(idx)).unwrap(),self.calc_id(idx)))}}"
-    wynn_item+="pub fn get_ident(&self,ident: Atrs)->Option<i32>{let id_u32 = ident as u32; match self.item.data.binary_search(&(id_u32<<24)){Ok(n) => Some(self.calc_id(n)),Err(n) => if n>=self.item.data.len()||self.item.data_atr(n)!=id_u32{None}else{Some(self.calc_id(n))}}}"
-    wynn_item+="pub fn get_set(&self)->Sets{if self.item.data_atr((self.item.partitions.0-1).min(self.item.data.len()-1))=="+str(order.index("set"))+"{Sets::from_u32(self.item.data_uval(self.item.partitions.0-1)).unwrap_or(Sets::None)}else{Sets::None}}"
-    wynn_item+="pub fn set_quality(&mut self, qual: f32){self.quality=qual}"
-    wynn_item+="pub fn iter_ids(&self) -> I32AtrsIter<'_>{I32AtrsIter{data:self.item.data,curr:self.item.partitions.3,end:self.item.data.len()}}"
-    wynn_item+="pub fn iter_data(&self) -> I32AtrsIter<'_>{I32AtrsIter{data:self.item.data,curr:0,end:self.item.data.len()}}"
-    wynn_item+="pub fn iter_skill_reqs(&self) -> I32AtrsIter<'_>{I32AtrsIter{data:self.item.data,curr:self.item.partitions.0,end:self.item.partitions.1}}"
-    wynn_item+="pub fn iter_skill_bonus(&self) -> I32AtrsIter<'_>{I32AtrsIter{data:self.item.data,curr:self.item.partitions.1,end:self.item.partitions.2}}"
-    wynn_item+="pub fn iter_damages(&self) -> DamsIter<'_>{DamsIter{item:self,curr:self.item.partitions.2,end:self.item.partitions.3}}"
-    wynn_item+="\n/// Iterates over the skill requirements *and* skill bonuses for the item.\n///\n/// The iterator yields a tuple of the form (skill: Skill, requirement: i32, bonus: i32)\npub fn iter_skills(&self) -> SkillsIter<'_>{SkillsIter{item:self,req_idx:self.item.partitions.0,req_end_idx:self.item.partitions.1,bonus_idx:self.item.partitions.1,bonus_end_idx:self.item.partitions.2}}"
-    wynn_item+="}"
-    # wynn_build_struct = "#[derive(Default)]\npub struct WynnBuild{pub item_idxs: [usize; 9], pub sets_quant: Vec<(Sets,usize)>, pub skills: [i32; 5], pub dams: [(i32, i32); 6], pub "
-    # wynn_build_struct += ", pub ".join([s[4::]+(": [i32; 5]" if s.endswith("defs") else ": [f32; 5]" if "def" in s else ": [f32; 6]") for s in ele_stats if s[4::] not in wynn_build_struct]) + ", pub "
-    # wynn_build_struct += ", pub ".join([stats[id][1]+": "+'f32' if stats[id][2]=='i32' else stats[id][2] for id in ids if id not in ele_ids and id not in skill_bonuses])
-    # wynn_build_struct+="} \nimpl WynnBuild{pub fn from_idxs(idxs: &[usize]) -> Option<WynnBuild>{let mut extra_skill_pts = 200; let mut skill_pts = [0,0,0,0,0];let mut max_reqs = [0,0,0,0,0]; let mut assigned_skills = [0,0,0,0,0]; let mut max_boost = [0,0,0,0,0]; for i in idxs.iter(){if *i==0_usize{continue} let item = items_list::ALL_ITEMS[*i];let req = item.get_reqs();let boosts = item.get_skill_bonuses();for (i,r) in req.iter().enumerate(){if max_reqs[i]<*r {max_reqs[i]=*r; max_boost[i]=boosts[i]}} for (i, b) in boosts.iter().enumerate(){skill_pts[i]+=b;}}for i in 0..5_usize{let diff = skill_pts[i]-max_boost[i]-max_reqs[i];if max_reqs[i]<=0 {continue} if diff<0{extra_skill_pts+=diff;skill_pts[i]-=diff+max_boost[i];assigned_skills[i]=-diff;}if extra_skill_pts<0 || -99>diff{return None}}let mut build = WynnBuild::default();build.skills=assigned_skills;for i in idxs.iter(){if *i!=0_usize{build.add_item(*i, 1.0, items_list::ALL_ITEMS[*i].props.contains(&Atrs::FixID(true)))}}Some(build)}"
-    # wynn_build_struct+="pub fn add_item(&mut self, item_idx: usize, id_quality: f32, fixed: bool){let item = get(item_idx); self.item_idxs[8.min(item.get_type().to_num()+ if item.get_type()==Type::Ring && self.item_idxs[4]!=0 || item.get_type().to_num()>4 {1} else {0})]=item_idx; for id in item.ids{match id{"
-    # for id in ids:
-    #     stat = stats[id]
-    #     if id in ["nDam","eDam","tDam","wDam","fDam","aDam"]:
-    #         idx = ["nDam","eDam","tDam","wDam","fDam","aDam"].index(id)
-    #         wynn_build_struct+=f"Atrs::{stat[0]}(n1,n2) => "+'{'+f"self.dams[{idx}].0+=*n1 as i32; self.dams[{idx}].1+=*n2 as i32"+'}, '
-    #     elif id in ele_ids:
-    #         idx = (dmg_types[1::] if "Def" in id else dmg_types).index(id[0])
-    #         wynn_build_struct+=f"Atrs::{stat[0]}(n) => self.{stat[1][2::]+'s'}[{idx}]+={'n' if id.endswith('Def') else 'calc_id(*n,id_quality,fixed)'}, "
-    #     elif id in skill_bonuses:
-    #         idx = skill_bonuses.index(id)
-    #         wynn_build_struct+=f"Atrs::{stat[0]}(n) => self.skills[{idx}]+=*n as i32,"
-    #     else:
-    #         wynn_build_struct+=f"Atrs::{stat[0]}(n) => self.{stat[1]}+={'n' if id.endswith('Def') else 'calc_id(*n,id_quality,fixed)'}, "
-    # wynn_build_struct+="_ => ()}}match item.props.last().unwrap(){Atrs::Set(s) => for i in 0..self.sets_quant.len(){if s==&self.sets_quant[i].0{self.sets_quant[i].1+=1}},_ => ()}}}"
-        
-    limit = 10000
-    wynn_items=[]
-    for d in data['items']:
-        struct_data = {}
-        partitions = [0,0,0,0]
-        for k, v in d.items():            
-            if not k in stats or k=='set' or v=='0-0': continue
-            if k=='tier' and (v=='Set' or d['name'] in get_set): # weird wonkyness because GM's boots? wtf is this item even?
-                if d['name'] in get_set or d['displayName'] in get_set: struct_data['set']=(order.index('set')<<24)+enum_builder['sets'][1].index(get_set[d['name' if d['name'] in get_set else 'displayName']])
-            stat = stats[k]
-            struct_data[k]=(order.index(k)<<24)+((v if stat[2]=="i32" or stat[2]=="u32" else 1 if stat[2]=="bool" else enum_builder[k][0].index(capitalize(v[0]) if type(v)==list else capitalize(v)) if k in enum_builder else int(v.split('-')[0])+(int(v.split('-')[1])<<12) if stat[2]=="u16,u16" else 0)&0xFFFFFF)
-        idx = 0
-        num_props = 0
-        partition_counter = [0,0,0]
-        for x in order:
-            if x in struct_data:
-                if x in save_separately:
-                    if num_props==0: num_props=idx
-                    if x in save_separately[0:5]: partition_counter[0]+=1
-                    elif x in save_separately[5:10]: partition_counter[1]+=1
-                    elif x in save_separately[10:16]: partition_counter[2]+=1
-                elif x in ids: break
-                idx+=1
-        if num_props==0: num_props=idx
-        partitions[0]=num_props
-        for i in range(len(partition_counter)):
-            partitions[i+1]=partitions[i]+partition_counter[i]
-        wynn_items.append('&super::WynnItemData{name: "'+d['displayName']+f'", sps_req_data: {compress_skills(get_skills(d, "Req", -1024))}, sps_bonus_data: {compress_skills(get_skills(d))}, partitions: ({",".join([str(n) for n in partitions])}), data: &['+','.join([str(struct_data[x]) for x in order if x in struct_data])+"]}")
-        limit -= 1
-        if limit<=0: break
-    print(item_props)
-    print(ids)
-    # gen_items_func = "pub fn get_items_vec() -> Vec<WynnItem>{vec!["+',\n'.join(wynn_items)+"]}"
-    iterators = "pub struct I32AtrsIter<'a>{data: &'a [u32], curr: usize, end: usize}impl Iterator for I32AtrsIter<'_>{type Item = (Atrs, i32);fn next(&mut self)->Option<Self::Item>{if self.curr>=self.end{return None}let res = (Atrs::from_u32(parse_data_atr(self.data[self.curr])).unwrap_or_default(),parse_data_i32(self.data[self.curr]));self.curr+=1;Some(res)}}"
-    # iterators += "pub struct WynnItemIter<'a>{item: &'a WynnItem, curr: usize, end: usize}impl Iterator for WynnItemIter<'_>{type Item = (Atrs,i32);fn next(&mut self) -> Option<Self::Item>{if self.curr>=self.end{return None}; let res = self.item.get_data_i32(self.curr);self.curr+=1;res}}"
-    iterators += "\npub struct DamsIter<'a>{item: &'a WynnItem, curr: usize, end: usize} impl Iterator for DamsIter<'_>{type Item = (DamType, (u32,u32)); fn next(&mut self) -> Option<Self::Item>{if self.curr>=self.end||self.curr>=self.item.item.data.len(){return None}; let dam_data = self.item.item.data[self.curr];let res = (DamType::from_u32(self.item.item.data_atr(self.curr)-"+str(order.index("nDam"))+").unwrap_or(DamType::Neutral),(dam_data&0xFFF,(dam_data&0xFFF000)>>12)); self.curr+=1; Some(res)}}"
-    iterators += "\npub struct SkillsIter<'a>{item: &'a WynnItem, req_idx: usize, bonus_idx: usize, req_end_idx: usize, bonus_end_idx: usize}impl Iterator for SkillsIter<'_>{type Item = (Skill,i32,i32);fn next(&mut self) -> Option<Self::Item>{if self.req_idx>=self.req_end_idx&&self.bonus_idx>=self.bonus_end_idx{return None}; let req = if self.req_idx<self.item.item.data.len(){self.item.item.data_atr(self.req_idx)-"+str(order.index("strReq"))+"}else{6}; let bon=if self.bonus_idx<self.item.item.data.len(){self.item.item.data_atr(self.bonus_idx)-"+str(order.index("str"))+"}else{6}; let mut res = (Skill::from_u32(req.min(bon)).unwrap_or(Skill::Str),0,0); if req<bon{res.1=self.item.item.data_ival(self.req_idx); self.req_idx+=1;} else if req>bon{res.2=self.item.item.data_ival(self.bonus_idx); self.bonus_idx+=1;} else {res.1=self.item.item.data_ival(self.req_idx);self.req_idx+=1;res.2=self.item.item.data_ival(self.bonus_idx);self.bonus_idx+=1;}Some(res)}}"
-    funcs = "pub fn iter() -> IntoIter<WynnItem>{items_list::ALL_ITEMS.iter().enumerate().map(|(idx, v)| WynnItem::from(idx)).collect::<Vec<WynnItem>>().into_iter()}"
-    funcs += "pub fn get(idx: usize)->WynnItem{WynnItem::from(idx)}"
-    funcs += "pub fn with_prop_value(prop: Atrs, value: u32) -> Vec<WynnItem>{let mut res: Vec<WynnItem> = Vec::new(); let prop_u32 = prop as u32; for (i,u) in items_list::ALL_ITEMS.iter().skip(1).enumerate(){let search = u.data.binary_search(&(prop_u32<<24)); let idx = match search{Ok(v) => v, Err(v) => v}; if u.data_atr(idx)==prop_u32 && u.data_uval(idx)==value {res.push(WynnItem::from(i+1))}} res}"
-    funcs +="pub fn with_name(s: &str) -> Option<WynnItem>{let s_trimmed = s.trim(); for item in items_list::ALL_ITEMS.iter().enumerate(){if item.1.name.eq_ignore_ascii_case(s_trimmed){return Some(WynnItem::from(item.0))}}return None}"
-    funcs+="pub fn calc_id(base_value: i32, roll_pct: f32, fixed: bool) -> i32{if fixed {base_value}else if base_value>0 {(base_value as f32*(roll_pct+0.3)).round() as i32}else{(base_value as f32*((1.0-roll_pct)*0.6+0.7)).round() as i32}}"
-    funcs+="pub fn url_hash_val(val: i32, n: u8) -> String{let mut result = String::new();let mut local_val = val;for i in 0..n{result = String::from(DIGITS[(local_val & 0x3f) as usize]) + &result;local_val >>= 6;}result}"
-    funcs+="pub fn get_set_bonuses(set: Sets, num_items: usize)->I32AtrsIter<'static>{let s = set as usize;I32AtrsIter{data:items_list::SET_BONUSES[s][num_items].1,curr:0,end:items_list::SET_BONUSES[s][num_items].1.len()}}"
-    # funcs+="pub fn set_skill_bonuses(set: Sets, num_items: usize)->{let mut res = [0;5]; for (i,(a, v)) in get_set_bonuses(set, num_items).enumerate(){let a_usize = a as usize; if a_usize>"+order.index('agi')+"{break}else if a_usize>="+order.index('str')+"{res}}res}"
-
-    gen_items_const = """pub const ALL_ITEMS: &'static[&'static super::WynnItemData] = &[&super::WynnItemData{name: "Invalid Item", sps_req_data: 0, sps_bonus_data: 0, partitions: (0,0,0,0), data:&[]},"""+',\n'.join(wynn_items)+"];"
-    gen_set_bonuses_const = "pub const SET_BONUSES: &'static[&'static [(i64,&'static [u32])]] = &["+',\n'.join(set_bonuses)+"];"
-
-    atrs_docs = "/// Used to identify almost all types of data stored in wynncraft items. \n///\n/// The following item attributes are ignored due to them either taking up a lot of memory or just not being useful for my application:\n/// - `drop`\n/// - `dropInfo`\n/// - `armorColor`\n/// - `skin`\n/// - `material` \n/// - `armorType`\n/// - `lore`\n/// - `quest`\n/// # Naming Convention\n/// **Attributes** - (Almost) all data stored in wynncraft items<br>\n/// **Properties** - Data intrinsic to items that don't get counted when calculating a build's stats. ie: `Type`, `Tier`, `ClassReq`, etc...<br>\n/// **Stats** - All data used for calculating a build's stats, including all *identifications*, hp, and ele defs. Damages, skill reqs, and skill bonuses are not included. <br>\n/// **Identifications** - All item *attributes* which are determined when identifying an item. These stats vary based on `WynnItem.quality`, unless `Atrs::FixID` is true. "
-    generated_files_header = "//! This file is autogenerated by rs_generator.py.<br>Code in this file uses wynncraft item data from [wynnbuilder's github repo](https://raw.githubusercontent.com/hppeng-wynn/hppeng-wynn.github.io/dev/data/2.0.4.3/items.json)\n"
-
-    enums_string.insert(0,"pub struct TryIntoWynnEnumError<F:std::fmt::Debug,T:WynnEnum>{from:F,to:T}impl <F:std::fmt::Debug,T:WynnEnum+std::default::Default> TryIntoWynnEnumError<F,T>{fn make(from: F) -> Self{Self{from, to: Default::default()}}}impl <F: std::fmt::Debug, T: WynnEnum> std::fmt::Debug for TryIntoWynnEnumError<F, T>{fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {write!(f,\"Could not convert {:#?} into {:#?}\", &self.from, std::any::type_name::<T>())}}")
-    enums_string.insert(1,"pub trait WynnEnum{}")
-    for i in range(len(enums_string)): 
-        if "pub enum Atrs" in enums_string[-i-1]: 
-            enums_string[-i-1]=f"{atrs_docs}\n{enums_string[-i-1]}" 
-            break
-
-    global tester
-    tester=gen_items_const
-
-    if not update: return
-
-    # if not os.path.exists("src\\wynn_data"): os.mkdir("src\\wynn_data")
-    if not os.path.exists("src\\wynn_data\\items"): os.mkdir("src\\wynn_data\\items")
-    if not os.path.exists("src\\wynn_data\\enums"): os.mkdir("src\\wynn_data\\enums")
-    # if not os.path.exists("src\\wynn_data\\builder"): os.mkdir("src\\wynn_data\\builder")
-    if not os.path.exists("src\\wynn_data\\sets"): os.mkdir("src\\wynn_data\\sets")
-
-    # writes to enums
-    write_file('src\\wynn_data\\enums\\mod.rs',generated_files_header+"use core::fmt;mod convert_macro;use crate::enum_from_into;\n"+"\n".join(enums_string))
-    
-    # writes constant item data
-    write_file('src\\wynn_data\\items\\items_list.rs',generated_files_header+gen_items_const)
-    
-    # writes constant set data
-    write_file('src\\wynn_data\\sets\\set_bonus_data.rs',generated_files_header+gen_set_bonuses_const)
-    
-    # writes constants variables
-    write_file('src\\wynn_data\\general\\consts.rs',generated_files_header+consts)
