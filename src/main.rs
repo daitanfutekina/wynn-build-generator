@@ -84,6 +84,7 @@ fn main() {
     // let test3 = SkillPts::from(sps3);
 
     // let test4 = -test;
+    println!("sp4 cost red {}",make_build!((KERATOCONUS, AZURITE, RINGLETS, CAPRICORN, MOON_POOL_CIRCLET, OLD_KEEPERS_RING, PROWESS, RENDA_LANGIT, HERO),105).unwrap().get_stat(Atrs::SpRaw4));
 
     // println!("{}",test+test2);
     // println!("{}, {}",test-test3,(test-test3).get_skill(Skill::Str));

@@ -114,7 +114,11 @@ impl WynnItem {
         .unwrap_or(Tier::Common)
     }
     fn calc_id(&self, idx: usize) -> i32 {
-        let base_value = self.item.data_ival(idx);
+        let base_value = 
+        if self.item.data_atr(idx) >= Atrs::SpRaw1 as u32 && self.item.data_atr(idx) <= Atrs::SpRaw4 as u32{
+            -self.item.data_ival(idx)
+        }else{self.item.data_ival(idx)};
+        
         if self.fixed_id() || self.item.data_atr(idx) < Atrs::NUM_NON_IDS as u32{
             base_value
         } else if base_value > 0 {

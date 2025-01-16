@@ -151,7 +151,7 @@ impl WynnBuild {
     /// 
     /// `spell`: number 0 to 3
     pub fn get_spell_cost(&self, spell: usize) -> f32{
-        ((self.atree.get_cost(spell) as f32 * (1.0-skill_to_pct(Skill::Int, self.skills.get(Skill::Int))) + self.stats[Atrs::SpRaw1 as usize - Atrs::NUM_NON_STATS + spell] as f32) * (100+self.stats[Atrs::SpPct1 as usize - Atrs::NUM_NON_STATS + spell]) as f32).round() / 100.0
+        ((self.atree.get_cost(spell) as f32 * (1.0-skill_to_pct(Skill::Int, self.skills.get(Skill::Int))) - self.stats[Atrs::SpRaw1 as usize - Atrs::NUM_NON_STATS + spell] as f32) * (100+self.stats[Atrs::SpPct1 as usize - Atrs::NUM_NON_STATS + spell]) as f32).round().max(1f32) / 100.0
     }
 
     /// Calculates the number of a specific spell that can be cast per second (ignoring spam cost increases)
@@ -166,7 +166,7 @@ impl WynnBuild {
 
     /// Calculates the effective mana regen of this build (mana regen * int cost reduction)
     pub fn calc_emr(&self) -> f32{
-        self.get_stat(Atrs::Mr) as f32 / 5.0 / (1.0-skill_to_pct(Skill::Int, self.skills.get(Skill::Int)))
+        self.get_stat(Atrs::Mr) as f32 / (1.0-skill_to_pct(Skill::Int, self.skills.get(Skill::Int)))
     }
 
     /// Generates the hash of this build, which can be used to save this build in a text format
