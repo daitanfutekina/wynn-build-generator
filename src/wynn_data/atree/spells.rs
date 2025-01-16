@@ -1,5 +1,6 @@
 use super::{parse_data_i32, parse_data_k, parse_data_uval, AtreeItemEffect, ClassAtreeEnums, EffectKey, EffectPartKey, EffectType, archer, assassin, mage, shaman, warrior};
 use super::{WynnEnum, Class};
+
 #[derive(Default, PartialEq)]
 pub struct Spell{
     cost: i32,
@@ -95,7 +96,7 @@ impl Spell{
                 EffectKey::Multipliers => todo!(),
                 EffectKey::Bonuses => todo!(),
                 EffectKey::Output => todo!(),
-                EffectKey::Scaling => todo!(), // what does this mean?
+                EffectKey::Scaling => (), // what does this mean? TODO ERRORS!!!
                 EffectKey::Inputs => todo!(),
                 EffectKey::Hits => todo!(),
             }

@@ -483,7 +483,7 @@ def setup_atree(data,for_wynn_class=None):
         props = setup_file_from_data(atree_item['properties'],False)
         effects = []
         for e in atree_item['effects']:
-            temp=setup_file_from_data(e,False,[['AtreeKey','AtreeItems','EffectPartType'],['AtreeKey','EffectType','Spell','EffectKey','AtreeItems'],['AtreeKey','EffectType','Spell','EffectKey','AtreeItems']],['behavior'],{'target_part' : "SpellPart"})
+            temp=setup_file_from_data(e,False,[['AtreeKey','AtreeItems','EffectPartType'],['AtreeKey','EffectType','Spell','EffectKey','AtreeItems'],['AtreeKey','EffectType','Spell','EffectKey','AtreeItems'],['AtreeKey', 'AtreeItems', 'Spell']],['behavior'],{'target_part' : "SpellPart"})
             effects.append(f"&[{','.join([str(n) for n in temp])}]")
         data = setup_file_from_data(atree_item,False,[],['parents','dependencies','blockers','properties','effects','desc','req_archetype','display','__TODO'])
         appender = "&AtreeItemData{name:\""+atree_item['display_name']
